@@ -2,15 +2,15 @@
 
 DesktopVisual public releases are distributed as closed-source Windows binary packages through GitHub Releases.
 
-The GitHub repository is for public documentation and checksums. It is not the installable package and it does not contain source code.
+The GitHub repository is for public documentation, agent instruction files, and checksums. It is not the installable package and it does not contain source code.
 
 ## Correct Install Path
 
 Use this path:
 
 1. Open the GitHub Release page.
-2. Download `DesktopVisual-1.0.0-public-rc2.zip`.
-3. Download `DesktopVisual-1.0.0-public-rc2.sha256.txt`.
+2. Download `DesktopVisual-1.0.0-public-rc3.zip`.
+3. Download `DesktopVisual-1.0.0-public-rc3.sha256.txt`.
 4. Verify the SHA256.
 5. Extract the zip.
 6. Run commands from the extracted package root.
@@ -25,17 +25,25 @@ Those paths download documentation only and are not expected to run.
 ## SHA256 Verification
 
 ```powershell
-Get-FileHash .\DesktopVisual-1.0.0-public-rc2.zip -Algorithm SHA256
-Get-Content .\DesktopVisual-1.0.0-public-rc2.sha256.txt
-```
-
-Expected RC2 SHA256:
-
-```text
-ff2e3e345e2a7484dbe8179ec768b77fc44594b907657c21dbeaf62a5f0b0736
+Get-FileHash .\DesktopVisual-1.0.0-public-rc3.zip -Algorithm SHA256
+Get-Content .\DesktopVisual-1.0.0-public-rc3.sha256.txt
 ```
 
 Do not run the package if the values differ.
+
+## Agent Instructions
+
+The release package includes `AGENTS.md` and `skills/desktopvisual-visible-ui-first/SKILL.md`.
+
+`skills/desktopvisual-visible-ui-first/SKILL.md` is included in the release package so agent tools can follow DesktopVisuals intended operation priority.
+
+Agents should read both files before using DesktopVisual for desktop automation tasks.
+
+DesktopVisual operation priority:
+
+1. Visible UI operation first.
+2. Keyboard shortcut fallback only when visible UI operation cannot continue reliably.
+3. Backend/non-UI operation only when the visible window is unusable or the user explicitly asks for backend work.
 
 ## Windows First Run
 
@@ -45,7 +53,7 @@ This release is not claimed to be Microsoft Defender certified, SmartScreen allo
 
 Only run the package if you downloaded it from the official GitHub Release and verified SHA256. If you do not trust the source, do not run it.
 
-Code signing is planned for future evaluation and is not an RC2 blocker.
+Code signing is planned for future evaluation and is not an RC3 blocker.
 
 ## Service Help
 

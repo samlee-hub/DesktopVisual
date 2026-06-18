@@ -1,4 +1,4 @@
-# DesktopVisual 1.0.0 Public RC2
+# DesktopVisual 1.0.0 Public RC3
 
 This repository is the public documentation repository for DesktopVisual. It is not the runnable application package.
 
@@ -7,30 +7,30 @@ Important:
 - Source code is not included in the public release.
 - Do not install DesktopVisual by using `git clone`.
 - Do not install DesktopVisual by using GitHub `Code` > `Download ZIP`.
-- The repository ZIP only contains public documentation and checksum text.
+- The repository ZIP only contains public documentation, agent instruction files, and checksum text.
 - Download the runnable Windows package from Releases:
-  `DesktopVisual-1.0.0-public-rc2.zip`
+  `DesktopVisual-1.0.0-public-rc3.zip`
 - Download the checksum file from the same Release:
-  `DesktopVisual-1.0.0-public-rc2.sha256.txt`
+  `DesktopVisual-1.0.0-public-rc3.sha256.txt`
 - Extract the release zip and run commands from the extracted package root.
 
 Release page:
 
-https://github.com/samlee-hub/DesktopVisual/releases/tag/v1.0.0-public-rc2
+https://github.com/samlee-hub/DesktopVisual/releases/tag/v1.0.0-public-rc3
 
 ## Verify The Download
 
-After downloading the RC2 zip and checksum file from GitHub Releases:
+After downloading the RC3 zip and checksum file from GitHub Releases:
 
 ```powershell
-Get-FileHash .\DesktopVisual-1.0.0-public-rc2.zip -Algorithm SHA256
-Get-Content .\DesktopVisual-1.0.0-public-rc2.sha256.txt
+Get-FileHash .\DesktopVisual-1.0.0-public-rc3.zip -Algorithm SHA256
+Get-Content .\DesktopVisual-1.0.0-public-rc3.sha256.txt
 ```
 
-Expected RC2 SHA256:
+Expected RC3 SHA256:
 
 ```text
-ff2e3e345e2a7484dbe8179ec768b77fc44594b907657c21dbeaf62a5f0b0736
+See DesktopVisual-1.0.0-public-rc3.sha256.txt next to the release zip.
 ```
 
 The two values must match. If they do not match, do not run the package.
@@ -45,9 +45,25 @@ Only run the binary if all of the following are true:
 - The SHA256 hash matches the published checksum.
 - You trust the release source and intended local automation use.
 
-If you do not trust the source, do not run it. Code signing is planned for future evaluation and is not a blocker for this RC2 package.
+If you do not trust the source, do not run it. Code signing is planned for future evaluation and is not a blocker for this RC3 package.
 
 This release is not claimed to be Microsoft Defender certified, SmartScreen allowlisted, or enterprise distribution certified.
+
+## Agent Usage Instructions
+
+This package includes agent usage instructions.
+
+Agents should read `AGENTS.md` and `skills/desktopvisual-visible-ui-first/SKILL.md` before using DesktopVisual.
+
+DesktopVisual uses visible UI first:
+
+1. Visible UI mouse/keyboard operation is first.
+2. Keyboard shortcuts are fallback.
+3. Backend operation is last resort.
+
+`F12` stops the current task only and returns `STOP_USER_FORCE_EXIT_F12`. It does not close `winagent.exe`.
+
+The public release safety policy applies.
 
 ## What DesktopVisual Is For
 
@@ -68,10 +84,9 @@ Run from the extracted release package root:
 .\bin\winagent.exe serve --help
 .\selftest.ps1
 .\serve_help_selftest.ps1
+.\public_release_skill_package_selftest.ps1
 .\public_release_acceptance_gate.ps1
 ```
-
-`F12` stops the current task only and returns `STOP_USER_FORCE_EXIT_F12`. It does not close `winagent.exe`.
 
 The default/full_access user mode selector is deferred in this release candidate:
 

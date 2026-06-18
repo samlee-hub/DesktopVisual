@@ -2,46 +2,55 @@
 
 Use the GitHub Release package. Do not install DesktopVisual by cloning the repository or downloading the repository ZIP from GitHub `Code` > `Download ZIP`.
 
-The public repository contains documentation only. The runnable Windows package is attached to the Release.
+The public repository contains documentation, agent instruction files, and checksum text only. The runnable Windows package is attached to the Release.
 
 ## Download
 
-From the RC2 Release page, download both files:
+From the RC3 Release page, download both files:
 
-- `DesktopVisual-1.0.0-public-rc2.zip`
-- `DesktopVisual-1.0.0-public-rc2.sha256.txt`
+- `DesktopVisual-1.0.0-public-rc3.zip`
+- `DesktopVisual-1.0.0-public-rc3.sha256.txt`
 
 Release page:
 
-https://github.com/samlee-hub/DesktopVisual/releases/tag/v1.0.0-public-rc2
+https://github.com/samlee-hub/DesktopVisual/releases/tag/v1.0.0-public-rc3
 
 ## Verify
 
 Run PowerShell in the directory where both files were downloaded:
 
 ```powershell
-Get-FileHash .\DesktopVisual-1.0.0-public-rc2.zip -Algorithm SHA256
-Get-Content .\DesktopVisual-1.0.0-public-rc2.sha256.txt
+Get-FileHash .\DesktopVisual-1.0.0-public-rc3.zip -Algorithm SHA256
+Get-Content .\DesktopVisual-1.0.0-public-rc3.sha256.txt
 ```
 
-Expected RC2 SHA256:
-
-```text
-ff2e3e345e2a7484dbe8179ec768b77fc44594b907657c21dbeaf62a5f0b0736
-```
-
-The hash from `Get-FileHash` must match the hash in `DesktopVisual-1.0.0-public-rc2.sha256.txt`. If it does not match, delete the download and do not run it.
+The hash from `Get-FileHash` must match the hash in `DesktopVisual-1.0.0-public-rc3.sha256.txt`. If it does not match, delete the download and do not run it.
 
 ## Extract
 
-Extract `DesktopVisual-1.0.0-public-rc2.zip`, then open PowerShell from the extracted package root.
+Extract `DesktopVisual-1.0.0-public-rc3.zip`, then open PowerShell from the extracted package root.
 
 The package root is the directory that contains:
 
 - `bin\winagent.exe`
+- `AGENTS.md`
+- `skills\desktopvisual-visible-ui-first\SKILL.md`
 - `selftest.ps1`
 - `serve_help_selftest.ps1`
+- `public_release_skill_package_selftest.ps1`
 - `public_release_acceptance_gate.ps1`
+
+## Agent Usage
+
+When using an agent or coding assistant with DesktopVisual:
+
+1. Open the package root.
+2. Read `AGENTS.md`.
+3. Read `skills/desktopvisual-visible-ui-first/SKILL.md`.
+4. Use `.\bin\winagent.exe version` to confirm runtime availability.
+5. Follow the visible UI first priority.
+
+Visible UI mouse/keyboard operation is first. Keyboard shortcut fallback is second. Backend/non-UI operation is last resort.
 
 ## First Run On Windows
 
@@ -68,6 +77,7 @@ Run these commands from the extracted package root:
 .\public_release_safety_policy_selftest.ps1
 .\public_release_exam_integrity_policy_selftest.ps1
 .\public_release_allowed_context_selftest.ps1
+.\public_release_skill_package_selftest.ps1
 .\public_release_acceptance_gate.ps1
 ```
 
