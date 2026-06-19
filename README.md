@@ -1,93 +1,63 @@
-# DesktopVisual 1.0.0 Public RC3
+# DesktopVisual 1.0.0
 
-This repository is the public documentation repository for DesktopVisual. It is not the runnable application package.
+DesktopVisual is a Windows visible-first desktop automation runtime for authorized local GUI workflows. This repository is the closed-source public distribution. Source code is not included in this public distribution.
 
-Important:
+This public repository provides the Windows binary, public-safe documentation, safety notes, command protocol, a Codex skill, checksums, and usage examples.
 
-- Source code is not included in the public release.
-- Do not install DesktopVisual by using `git clone`.
-- Do not install DesktopVisual by using GitHub `Code` > `Download ZIP`.
-- The repository ZIP only contains public documentation, agent instruction files, and checksum text.
-- Download the runnable Windows package from Releases:
-  `DesktopVisual-1.0.0-public-rc3.zip`
-- Download the checksum file from the same Release:
-  `DesktopVisual-1.0.0-public-rc3.sha256.txt`
-- Extract the release zip and run commands from the extracted package root.
+Version lineage: developer internal v6.12.1 -> DesktopVisual 1.0.0.
 
-Release page:
+## What is included
 
-https://github.com/samlee-hub/DesktopVisual/releases/tag/v1.0.0-public-rc3
+- `bin/winagent.exe`: unsigned Windows binary.
+- `COMMAND_PROTOCOL.md`: public-safe command protocol summary.
+- `AGENTS.md`: public-safe agent usage rules.
+- `skills/desktopvisual-visible-ui-first/SKILL.md`: visible-first Codex skill.
+- `docs/`: public-safe architecture, safety, installation, usage, roadmap, and limitations.
+- `checksums/SHA256SUMS.txt`: SHA-256 checksums.
+- `manifest/desktopvisual-public-1.0.0.json`: public distribution manifest.
+- `scripts/smoke-test.ps1`: local public package smoke test.
 
-## Verify The Download
+## Unsigned binary notice
 
-After downloading the RC3 zip and checksum file from GitHub Releases:
+`winagent.exe` is not code-signed in DesktopVisual 1.0.0. Windows SmartScreen or antivirus tools may require manual review before first run. Only run the binary if you trust this distribution and have verified the checksum.
+
+## Installation
+
+1. Clone or download this repository.
+2. Open PowerShell in the repository root.
+3. Verify checksums:
 
 ```powershell
-Get-FileHash .\DesktopVisual-1.0.0-public-rc3.zip -Algorithm SHA256
-Get-Content .\DesktopVisual-1.0.0-public-rc3.sha256.txt
+Get-FileHash -Algorithm SHA256 .\bin\winagent.exe
+Get-Content .\checksums\SHA256SUMS.txt
 ```
 
-Expected RC3 SHA256:
+4. Run the smoke test:
 
-```text
-See DesktopVisual-1.0.0-public-rc3.sha256.txt next to the release zip.
+```powershell
+.\scripts\smoke-test.ps1
 ```
 
-The two values must match. If they do not match, do not run the package.
-
-## Windows First Run Notice
-
-The DesktopVisual public RC binary is not code signed. Windows, Microsoft Defender SmartScreen, or third-party security software may show a first-run warning or confirmation prompt.
-
-Only run the binary if all of the following are true:
-
-- You downloaded it from the official GitHub Release.
-- The SHA256 hash matches the published checksum.
-- You trust the release source and intended local automation use.
-
-If you do not trust the source, do not run it. Code signing is planned for future evaluation and is not a blocker for this RC3 package.
-
-This release is not claimed to be Microsoft Defender certified, SmartScreen allowlisted, or enterprise distribution certified.
-
-## Agent Usage Instructions
-
-This package includes agent usage instructions.
-
-Agents should read `AGENTS.md` and `skills/desktopvisual-visible-ui-first/SKILL.md` before using DesktopVisual.
-
-DesktopVisual uses visible UI first:
-
-1. Visible UI mouse/keyboard operation is first.
-2. Keyboard shortcuts are fallback.
-3. Backend operation is last resort.
-
-`F12` stops the current task only and returns `STOP_USER_FORCE_EXIT_F12`. It does not close `winagent.exe`.
-
-The public release safety policy applies.
-
-## What DesktopVisual Is For
-
-DesktopVisual is a local Windows desktop automation runtime for visible UI workflows. This public release is intended for authorized local desktop automation, browser form workflows, local file workflows, communication drafts, developer tests, and personal tasks where automation is permitted.
-
-## What DesktopVisual Is Not For
-
-Do not use this package to violate explicit rules for exams, assessments, interviews, contests, or platform evaluations. Do not use it to bypass CAPTCHA, human verification, credential or account checks, proctoring, lockdown browser, anti-cheat, anti-automation, or third-party security controls.
-
-The public release policy is context based. It is not a keyword-only blocker. Words such as `test`, `quiz`, `exam`, `OJ`, or `LeetCode` do not stop automation by themselves.
-
-## Basic Package Commands
-
-Run from the extracted release package root:
+## Quick start
 
 ```powershell
 .\bin\winagent.exe version
-.\bin\winagent.exe serve --help
-.\selftest.ps1
-.\serve_help_selftest.ps1
-.\public_release_skill_package_selftest.ps1
-.\public_release_acceptance_gate.ps1
+.\bin\winagent.exe help
+.\bin\winagent.exe safety-report
 ```
 
-The default/full_access user mode selector is deferred in this release candidate:
+For GUI input commands, provide an explicit target window title and operate only on windows you are authorized to control.
 
-- default/full_access user mode selector = deferred
+## Safety boundaries
+
+DesktopVisual 1.0.0 uses visible-first, target-window-locked, user-level Windows input. It is intended for authorized local desktop workflows. It does not bypass UAC, protected desktops, credentials, CAPTCHA, anti-cheat, proctoring, banking, payment, security controls, platform rate limits, or access controls.
+
+Accepted visible input paths use real mouse and keyboard events. Clipboard and backend writes are not part of the accepted visible input path.
+
+## Limitations
+
+- DesktopVisual 1.0.0 is not a universal autonomous IDE developer.
+- Visual Studio C++ multi-file workflow is not included in 1.0.0.
+- Complex arbitrary app and web automation remains experimental.
+- Complex tasks require concrete goals, allowed targets, and constraints.
+- Users remain responsible for reviewing outputs and authorizing actions.

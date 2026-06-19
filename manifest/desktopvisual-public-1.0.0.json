@@ -1,0 +1,28 @@
+﻿{
+    "version":  "1.0.0",
+    "distribution_type":  "closed_source_public_binary",
+    "source_code_included":  false,
+    "binary_path":  "bin/winagent.exe",
+    "binary_sha256":  "B62634663863E6AB94E9D711992C9939B4A3B2D751A53C94F7784D320C2158A0",
+    "binary_source":  "release_build_output_public_path_sanitized",
+    "binary_private_path_literal_sanitization":  {
+                                                     "enabled":  true,
+                                                     "sanitized_utf16_literal_count":  17,
+                                                     "sanitized_ascii_literal_count":  0,
+                                                     "private_literals_retained":  false
+                                                 },
+    "generated_from_developer_commit":  "551727227e761927fccdd3863c2d3ce09614586e",
+    "generated_from_release_commit":  "0bae98203765bd6289bfbee53bb0c4e104e1b99d",
+    "generated_at":  "2026-06-20T07:44:21.4137662+08:00",
+    "public_github_url":  "https://github.com/samlee-hub/DesktopVisual",
+    "limitations":  [
+                        "not a universal autonomous IDE developer",
+                        "Visual Studio C++ multi-file workflow is not included in 1.0.0",
+                        "complex arbitrary app and web automation remains experimental",
+                        "complex tasks require concrete goals and constraints"
+                    ],
+    "safety_boundary_summary":  "Visible-first, target-window-locked, user-level Windows input with explicit fallback boundaries and stop conditions for protected, credentialed, proctored, anti-cheat, CAPTCHA, payment, banking, and unauthorized workflows.",
+    "files_included_count":  19,
+    "forbidden_source_scan":  "PASS",
+    "private_path_scan":  "PASS"
+}

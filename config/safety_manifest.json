@@ -1,0 +1,53 @@
+﻿{
+    "version":  2,
+    "project":  "DesktopVisual",
+    "mode":  "closed_source_public_binary",
+    "default_permission_mode":  "PUBLIC_DEFAULT",
+    "denied":  {
+                   "sensitive_categories":  [
+                                                "admin_elevation",
+                                                "protected_desktop",
+                                                "active_protection",
+                                                "anti_cheat",
+                                                "captcha",
+                                                "human_verification",
+                                                "automation_detection",
+                                                "proctoring",
+                                                "payment",
+                                                "banking",
+                                                "credentials"
+                                            ]
+               },
+    "runtime_limits":  {
+                           "max_steps":  100,
+                           "max_duration_ms":  120000,
+                           "max_recoveries":  0,
+                           "emergency_stop_key":  "F12"
+                       },
+    "consent":  {
+                    "requires_explicit_target":  true,
+                    "requires_visible_foreground_window":  true,
+                    "allow_background_control":  false,
+                    "allow_unrestricted_desktop":  false
+                },
+    "permission_modes":  {
+                             "PUBLIC_DEFAULT":  {
+                                                    "third_party_apps":  false,
+                                                    "external_web":  false,
+                                                    "communication":  false,
+                                                    "content_decision":  false,
+                                                    "cross_window":  false,
+                                                    "global_desktop":  false,
+                                                    "browser":  false,
+                                                    "explorer":  false,
+                                                    "local_file_open":  false,
+                                                    "localhost":  false,
+                                                    "requires_full_access_session":  false
+                                                }
+                         },
+    "audit":  {
+                  "write_audit_log":  false,
+                  "write_markdown_report":  false,
+                  "redact_clipboard_text_in_logs":  true
+              }
+}

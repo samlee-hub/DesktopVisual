@@ -1,23 +1,15 @@
-# DesktopVisual Public Release Agent Instructions
+# DesktopVisual Public Agent Rules
 
-When an agent or coding assistant works inside this package, it must read:
+Use DesktopVisual only for authorized local Windows GUI workflows.
 
-skills/desktopvisual-visible-ui-first/SKILL.md
+Before any GUI input:
 
-before attempting any user-requested desktop automation task.
+1. Run `bin\winagent.exe version`.
+2. Run `bin\winagent.exe safety-report` for policy visibility.
+3. Identify one explicit target window.
+4. Prefer visible observation and target-locked actions.
+5. Stop on any non-empty error code.
 
-For user requests involving DesktopVisual, desktop automation, visible app operation, mouse/keyboard control, browser/page operation, form filling, or file window operation, follow this priority order:
+Do not automate credentials, payments, banking, protected desktops, elevated windows, CAPTCHA, human verification, proctoring, anti-cheat, anti-automation bypass, platform abuse, or unauthorized third-party workflows.
 
-1. Use DesktopVisual visible UI operation first.
-2. Use keyboard shortcut fallback only when visible UI operation cannot continue reliably.
-3. Use backend/non-UI operation only when the visible window is unusable or the user explicitly asks for backend work.
-
-Do not use backend operations to replace visible UI operation when visible UI is available.
-
-Respect F12 current-task force exit.
-
-Respect the public release safety policy.
-
-Do not bypass CAPTCHA, human verification, account security verification, active proctoring, lockdown browser, anti-cheat, anti-automation tools, or explicit security/risk verification.
-
-Do not treat RAW_COMPLETED_UNVERIFIED as PASS.
+DesktopVisual is not a universal autonomous developer. Complex workflows require concrete goals, allowed applications, allowed files, expected outputs, and user review.
