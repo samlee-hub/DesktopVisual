@@ -1,0 +1,3 @@
+target_title=Agent Test Window
+read_file D:\testrepo\testwindow\runtime\state.txt
+assert_file_contains D:\testrepo\testwindow\runtime\state.txt this_text_should_not_exist

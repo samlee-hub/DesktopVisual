@@ -1,0 +1,79 @@
+{
+  "schema_version": "5.1.1",
+  "step_id": "click_submit_and_verify",
+  "name": "Click mock submit and verify success",
+  "preconditions": [
+    {
+      "type": "scene_state",
+      "expected": "normal"
+    },
+    {
+      "type": "element_exists",
+      "element_id": "submit-button"
+    },
+    {
+      "type": "target_ready",
+      "expected": true
+    },
+    {
+      "type": "window_focused",
+      "expected": true
+    },
+    {
+      "type": "profile_active",
+      "profile": "browser_local"
+    },
+    {
+      "type": "safety_allowed",
+      "action": "click_submit_mock"
+    },
+    {
+      "type": "capability_available",
+      "capability": "minimal_task_session_runner"
+    }
+  ],
+  "action": {
+    "type": "click_submit_mock",
+    "locator": "id:submit-button",
+    "input_value": ""
+  },
+  "verification": {
+    "type": "text_appeared",
+    "expected_text": "Success: local mock form submitted",
+    "expected_scene_state": "success",
+    "expected_change_events": [
+      "text_appeared",
+      "target_ready",
+      "region_changed"
+    ],
+    "expected_elements": [
+      {
+        "element_id": "result",
+        "condition": "appeared"
+      }
+    ]
+  },
+  "timeout_ms": 1000,
+  "retry_policy": {
+    "max_attempts": 1,
+    "backoff_ms": 100
+  },
+  "on_failure": {
+    "strategy": "stop_task",
+    "failure_reason": "VERIFICATION_TIMEOUT"
+  },
+  "safety_requirements": {
+    "permission_profile": "DEFAULT",
+    "allow_unrestricted_desktop": false,
+    "requires_human_confirmation": false
+  },
+  "expected_scene_state": "success",
+  "expected_change_events": [
+    "text_appeared",
+    "target_ready",
+    "region_changed"
+  ],
+  "expected_elements": [
+    "result"
+  ]
+}

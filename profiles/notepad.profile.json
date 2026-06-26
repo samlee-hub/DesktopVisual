@@ -1,0 +1,45 @@
+{
+  "profile_name": "notepad",
+  "app_kind": "local_desktop_app",
+  "process_match": "notepad.exe",
+  "title_match": "Notepad",
+  "window_class_match": "Notepad",
+  "allowed_window_scope": "explicit_title_or_process_match",
+  "common_locators": [
+    {
+      "name": "edit_area",
+      "selector": "uia:type=Edit",
+      "semantic_status": "resolved",
+      "risk_status": "normal",
+      "notes": "Local editable text area."
+    }
+  ],
+  "roi_definitions": {
+    "editor": { "relative_rect": [0.02, 0.10, 0.96, 0.86], "purpose": "text edit OCR" }
+  },
+  "visual_strategy": {
+    "prefer": ["uia", "ocr"],
+    "external_visual_provider": "disabled"
+  },
+  "ocr_strategy": {
+    "default": "roi_first",
+    "full_ocr_fallback": true
+  },
+  "recovery_strategy": {
+    "loading": "wait_observe_loop",
+    "dialog_open": "safe_dialog_route",
+    "error": "stop"
+  },
+  "safety_overrides": {
+    "can_relax_safety_manifest": false,
+    "notes": "Does not permit saving outside allowed write roots."
+  },
+  "task_templates": [
+    { "name": "type_local_text", "required_locator": "edit_area", "requires_confirmation": false }
+  ],
+  "confirmation_nodes": [
+    { "name": "save_prompt", "route": "human_confirmation" }
+  ],
+  "version": "4.5.0",
+  "notes": "Local Notepad adapter; no public high-permission behavior."
+}

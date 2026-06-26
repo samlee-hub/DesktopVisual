@@ -1,0 +1,10 @@
+{
+  "task_version": "5.4.4",
+  "template_id": "notepad_edit_verify",
+  "profile": "notepad",
+  "parameters": {
+    "body": "DesktopVisual v5.4 local Notepad sample",
+    "expected_result": "DesktopVisual v5.4",
+    "output_region": "editor"
+  }
+}

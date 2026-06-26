@@ -1,0 +1,8 @@
+case_version=2
+# Case v2 expect failure test
+# This case should FAIL with ASSERTION_FAILED because we assert a non-existent selector
+
+target_title="Agent Test Window"
+
+# This selector does not exist - expect should fail
+expect selector_exists="uia:name=NonExistentButton999"

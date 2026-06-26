@@ -1,0 +1,18 @@
+{
+  "schema_version": "5.1.5",
+  "sample": "local_form_submit",
+  "task_session": "tasks/session_schema/local_form_fill_submit_mock_audit.task-session.json",
+  "step_contracts": [
+    "tasks/step_contract/valid_local_form_submit.step.json"
+  ],
+  "precondition_fixture": "tasks/step_contract/perception_pass.json",
+  "verification_before": "tasks/step_contract/verification_before_submit.json",
+  "verification_after": "tasks/step_contract/verification_after_success.json",
+  "commands": [
+    "step-contract-validate",
+    "step-precondition-check",
+    "step-verify",
+    "step-failure-classify"
+  ],
+  "notes": "Local mock sample only. It does not open a browser or call VLM."
+}

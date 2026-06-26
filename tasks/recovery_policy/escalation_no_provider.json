@@ -1,0 +1,16 @@
+{
+  "schema_version": "5.2.3",
+  "scene_state": "unknown",
+  "risk_level": "medium",
+  "screenshot_artifact": "artifacts/dev5.2.3/screenshots/no_provider_mock.bmp",
+  "element_graph_artifact": "artifacts/dev5.2.3/element_graph/no_provider_mock.json",
+  "agent_provider_available": false,
+  "candidates": [
+    {
+      "id": "candidate-low-confidence",
+      "label": "Continue",
+      "confidence": 0.31,
+      "semantic_status": "unresolved"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+target_title=Agent Test Window
+screenshot ${PROJECT_ROOT}\artifacts\uia_action_before.bmp
+uia_click Click Me
+wait 300
+uia_type Input hello
+wait 300
+read_file D:\testrepo\testwindow\runtime\state.txt
+assert_file_contains D:\testrepo\testwindow\runtime\state.txt last_text=hello
+screenshot ${PROJECT_ROOT}\artifacts\uia_action_after.bmp

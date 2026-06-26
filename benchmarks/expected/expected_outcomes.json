@@ -1,0 +1,12 @@
+{
+  "testwindow_basic": "PASS",
+  "testwindow_motion_operator": "PASS_OR_SKIPPED",
+  "notepad_text_entry": "PASS_OR_SKIPPED",
+  "calculator_simple_math": "PASS_OR_SKIPPED",
+  "explorer_temp_folder": "PASS",
+  "edge_local_form": "PASS_OR_SKIPPED",
+  "safety_denied_window": "SAFE_STOP",
+  "locator_not_found": "SAFE_STOP",
+  "window_not_unique": "SAFE_STOP_OR_SKIPPED",
+  "ocr_text_read": "PASS_OR_SKIPPED"
+}

@@ -1,0 +1,201 @@
+#pragma once
+
+#include <windows.h>
+
+#include <string>
+#include <vector>
+
+struct HumanMouseMotionOptions {
+    int moveDurationMs = 500;
+    int minSteps = 18;
+    int maxStepIntervalMs = 35;
+    int motionFrameRateHz = 0;
+    int dwellBeforeClickMs = 180;
+    int postClickSettleMs = 180;
+    int doubleClickIntervalMs = 140;
+    int targetEpsilonPx = 3;
+    bool useSmoothstepEasing = true;
+    bool verifyCursorBeforeClick = true;
+    bool retryFinalPositionIfNeeded = true;
+    bool fastVisibleUi = false;
+    bool motionFrameRateBestEffort = true;
+};
+
+struct KeyboardTextInputPlan {
+    int keyboardEventCount = 0;
+    int unicodeCharEventCount = 0;
+    int enterKeyEventCount = 0;
+    int tabKeyEventCount = 0;
+    int crlfNewlineCount = 0;
+    int lfNewlineCount = 0;
+    int crNewlineCount = 0;
+    int typedCharCount = 0;
+    int typedLineCount = 0;
+    bool multiline = false;
+    bool endsWithLineBreak = false;
+    bool newlineAsUnicode = false;
+    bool tabAsUnicode = false;
+};
+
+struct ActionResult {
+    bool ok = false;
+    std::wstring errorCode;
+    std::wstring error;
+    HWND foregroundBefore = nullptr;
+    HWND foregroundAfter = nullptr;
+    bool focusVerified = false;
+    int textLength = 0;
+    bool pasted = false;
+    std::wstring keys;
+};
+
+struct ClickResult {
+    bool ok = false;
+    std::wstring errorCode;
+    std::wstring error;
+    int targetClientX = 0;
+    int targetClientY = 0;
+    int targetScreenX = 0;
+    int targetScreenY = 0;
+    int cursorBeforeX = 0;
+    int cursorBeforeY = 0;
+    int cursorAfterX = 0;
+    int cursorAfterY = 0;
+    std::wstring moveMode;
+    int moveDurationMs = 0;
+    int moveSteps = 0;
+    int targetMotionFrameRateHz = 0;
+    double targetFrameIntervalMs = 0.0;
+    double actualFrameRateHz = 0.0;
+    double averageFrameIntervalMs = 0.0;
+    double p95FrameIntervalMs = 0.0;
+    bool motionFrameRateBestEffort = false;
+    bool frameTimestampsRecorded = false;
+    bool targetMiss = false;
+    bool cursorOvershoot = false;
+    HWND foregroundBefore = nullptr;
+    HWND foregroundAfter = nullptr;
+    bool focusVerified = false;
+    std::wstring actionMethod;
+    std::wstring moveProfile;
+    std::wstring pathType;
+    int distancePx = 0;
+    int durationMs = 0;
+    int stepCount = 0;
+    bool emergencyStopChecked = false;
+    std::wstring operatorProfilePath;
+    std::wstring operatorProfileQuality;
+    std::wstring operatorProfileSource;
+    int synthesizedPointCount = 0;
+    int wheelDelta = 0;
+    int wheelEventCount = 0;
+    bool sendInputUsed = false;
+    bool mouseeventfWheelUsed = false;
+    bool mouseeventfHWheelUsed = false;
+    bool humanmode = false;
+    bool backendAction = false;
+    bool directLaunch = false;
+    bool fallbackUsed = false;
+    bool actualClickSent = false;
+    bool actualDoubleClickSent = false;
+    bool cursorVerifiedBeforeClick = false;
+    bool clickAfterMoveEnd = false;
+    bool dwellCompletedBeforeClick = false;
+    bool withinTargetEpsilonBeforeClick = false;
+    int targetEpsilonPx = 0;
+    int finalX = 0;
+    int finalY = 0;
+    int actualBeforeClickX = 0;
+    int actualBeforeClickY = 0;
+    int distanceToTargetBeforeClickPx = 0;
+    int actualSteps = 0;
+    int dwellBeforeClickMs = 0;
+    int postClickSettleMs = 0;
+    int doubleClickIntervalMs = 0;
+    std::wstring easing;
+    std::wstring moveStartTs;
+    std::wstring moveEndTs;
+    std::wstring dwellStartTs;
+    std::wstring clickDownTs;
+    std::wstring clickUpTs;
+    std::wstring secondClickDownTs;
+    std::wstring secondClickUpTs;
+    std::vector<POINT> plannedPath;
+    std::vector<double> motionFrameTimestampsMs;
+};
+
+struct DragResult {
+    bool ok = false;
+    std::wstring errorCode;
+    std::wstring error;
+    int fromClientX = 0;
+    int fromClientY = 0;
+    int toClientX = 0;
+    int toClientY = 0;
+    int fromScreenX = 0;
+    int fromScreenY = 0;
+    int toScreenX = 0;
+    int toScreenY = 0;
+    int cursorBeforeX = 0;
+    int cursorBeforeY = 0;
+    int cursorAfterX = 0;
+    int cursorAfterY = 0;
+    std::wstring moveMode;
+    HWND foregroundBefore = nullptr;
+    HWND foregroundAfter = nullptr;
+    bool focusVerified = false;
+    bool mouseDownSent = false;
+    bool mouseUpSent = false;
+    std::wstring moveProfile;
+    std::wstring pathType;
+    int distancePx = 0;
+    int durationMs = 0;
+    int stepCount = 0;
+    bool emergencyStopChecked = false;
+    std::wstring operatorProfilePath;
+    std::wstring operatorProfileQuality;
+    std::wstring operatorProfileSource;
+    int synthesizedPointCount = 0;
+};
+
+struct TypeResult {
+    bool ok = false;
+    std::wstring errorCode;
+    std::wstring error;
+    std::wstring typeMode;
+    int charDelayMs = 0;
+    int lineDelayMs = 0;
+    bool batchKeyEvents = false;
+    int keyboardSendBatchCount = 0;
+    int textLength = 0;
+    HWND foregroundBefore = nullptr;
+    HWND foregroundAfter = nullptr;
+    bool focusVerified = false;
+};
+
+ClickResult ClickClientPoint(HWND hwnd, int x, int y, const std::wstring& moveMode, int moveDurationMs, const std::wstring& profilePath = L"", bool allowSyntheticProfile = false);
+ClickResult DoubleClickClientPoint(HWND hwnd, int x, int y, const std::wstring& moveMode, int moveDurationMs, const std::wstring& profilePath = L"", bool allowSyntheticProfile = false);
+ClickResult RightClickClientPoint(HWND hwnd, int x, int y, const std::wstring& moveMode, int moveDurationMs, const std::wstring& profilePath = L"", bool allowSyntheticProfile = false);
+ClickResult MoveScreenPoint(int screenX, int screenY, const std::wstring& moveMode, int moveDurationMs, const std::wstring& profilePath = L"", bool allowSyntheticProfile = false);
+ClickResult ClickScreenPoint(int screenX, int screenY, const std::wstring& moveMode, int moveDurationMs, const std::wstring& profilePath = L"", bool allowSyntheticProfile = false);
+ClickResult DoubleClickScreenPoint(int screenX, int screenY, const std::wstring& moveMode, int moveDurationMs, const std::wstring& profilePath = L"", bool allowSyntheticProfile = false);
+ClickResult RightClickScreenPoint(int screenX, int screenY, const std::wstring& moveMode, int moveDurationMs, const std::wstring& profilePath = L"", bool allowSyntheticProfile = false);
+ClickResult MoveMouseHumanMode(int screenX, int screenY, const HumanMouseMotionOptions& options = HumanMouseMotionOptions());
+ClickResult ClickHumanMode(int screenX, int screenY, const HumanMouseMotionOptions& options = HumanMouseMotionOptions());
+ClickResult DoubleClickHumanMode(int screenX, int screenY, const HumanMouseMotionOptions& options = HumanMouseMotionOptions());
+ClickResult RightClickHumanMode(int screenX, int screenY, const HumanMouseMotionOptions& options = HumanMouseMotionOptions());
+ClickResult ScrollClientPoint(HWND hwnd, int x, int y, int delta, const std::wstring& moveMode, const std::wstring& profilePath = L"", bool allowSyntheticProfile = false);
+ClickResult HorizontalScrollClientPoint(HWND hwnd, int x, int y, int delta, const std::wstring& moveMode, const std::wstring& profilePath = L"", bool allowSyntheticProfile = false);
+DragResult DragClientPoints(HWND hwnd, int fromX, int fromY, int toX, int toY, const std::wstring& moveMode, int durationMs, const std::wstring& profilePath = L"", bool allowSyntheticProfile = false);
+ActionResult PressKey(HWND hwnd, const std::wstring& keyName);
+ActionResult SendHotkey(HWND hwnd, const std::wstring& keys);
+ActionResult PressKeyGlobal(const std::wstring& keyName);
+ActionResult SendHotkeyGlobal(const std::wstring& keys);
+ActionResult SetClipboardUnicodeText(const std::wstring& text);
+ActionResult PasteClipboardText(HWND hwnd, const std::wstring& text, bool setText);
+ActionResult FocusTargetWindow(HWND hwnd);
+KeyboardTextInputPlan BuildKeyboardTextInputPlan(const std::wstring& text);
+TypeResult TypeText(HWND hwnd, const std::wstring& text, const std::wstring& typeMode, int charDelayMs);
+TypeResult TypeTextGlobal(const std::wstring& text, const std::wstring& typeMode, int charDelayMs);
+TypeResult TypeTextStructured(HWND hwnd, const std::wstring& text, const std::wstring& typeMode, int charDelayMs, int lineDelayMs, bool batchKeyEvents);
+TypeResult TypeTextStructuredGlobal(const std::wstring& text, const std::wstring& typeMode, int charDelayMs, int lineDelayMs, bool batchKeyEvents);

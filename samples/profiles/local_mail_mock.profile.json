@@ -1,0 +1,5 @@
+{
+  "profile_name": "local_mail_mock",
+  "inherits_from": "profiles/local_mail_mock.profile.json",
+  "sample_scope": "local_fixture_only"
+}

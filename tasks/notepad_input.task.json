@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "name": "notepad_input",
+  "target": {
+    "title": "Notepad",
+    "process": "notepad.exe"
+  },
+  "budget": {
+    "max_steps": 50,
+    "max_duration_ms": 120000,
+    "max_recoveries": 2
+  },
+  "steps": [
+    {
+      "name": "observe_notepad",
+      "type": "observe"
+    },
+    {
+      "name": "type_text",
+      "type": "act",
+      "selector": "coord:x=220,y=220",
+      "action": "type",
+      "text": "DesktopVisual v3 MVP Test",
+      "expect": {
+        "text_contains": "DesktopVisual"
+      }
+    }
+  ]
+}

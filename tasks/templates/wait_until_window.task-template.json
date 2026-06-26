@@ -1,0 +1,23 @@
+{
+  "name": "wait_until_window",
+  "description": "Wait briefly and verify the foreground window title contains expected text.",
+  "required_permissions": ["target_window", "window_session"],
+  "allowed_window": {
+    "title": "${task.target.title}",
+    "process": "${task.target.process}",
+    "requires_unique": true
+  },
+  "expected_result": "The foreground window title contains the requested text.",
+  "failure_behavior": "Stop on window resolution, title-change, timeout, or expectation failure.",
+  "steps": [
+    {
+      "name": "wait_until_window",
+      "type": "wait",
+      "wait_ms": "${wait_ms}",
+      "timeout_ms": "${timeout_ms}",
+      "expect": {
+        "window_title_contains": "${title_contains}"
+      }
+    }
+  ]
+}

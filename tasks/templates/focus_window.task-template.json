@@ -1,0 +1,20 @@
+{
+  "name": "focus_window",
+  "description": "Focus the authorized target window through an explicit selector.",
+  "required_permissions": ["target_window", "focus_window", "selector"],
+  "allowed_window": {
+    "title": "${task.target.title}",
+    "process": "${task.target.process}",
+    "requires_unique": true
+  },
+  "expected_result": "The target window is foreground and focus verified.",
+  "failure_behavior": "Stop on window, safety, selector, or focus failure.",
+  "steps": [
+    {
+      "name": "focus_window",
+      "type": "act",
+      "selector": "${selector}",
+      "action": "focus"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "name": "benchmark_testwindow_motion_operator",
+  "target": {
+    "title": "Agent Test Window",
+    "process": "TestWindow.exe"
+  },
+  "budget": {
+    "max_steps": 20,
+    "max_duration_ms": 60000,
+    "max_recoveries": 0
+  },
+  "steps": [
+    {
+      "name": "locate_button",
+      "type": "locate",
+      "selector": "uia:name=Click Me,type=Button"
+    },
+    {
+      "name": "click_button_operator",
+      "type": "act",
+      "selector": "uia:name=Click Me,type=Button",
+      "action": "click",
+      "move_mode": "operator-human",
+      "expect": {
+        "selector_exists": "uia:name=Click Me,type=Button"
+      }
+    }
+  ]
+}

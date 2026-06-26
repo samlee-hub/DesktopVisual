@@ -1,0 +1,23 @@
+{
+  "schema_version": "5.2.1",
+  "policy_id": "invalid_unknown_strategy",
+  "task_type": "local_form_fill_submit_mock",
+  "permission_profile": "DEFAULT",
+  "retry_budget": {
+    "max_attempts": 1,
+    "max_total_recovery_ms": 100,
+    "max_wait_ms": 100,
+    "backoff_ms": 50
+  },
+  "routes": [
+    {
+      "failure_reason": "TARGET_NOT_READY",
+      "strategy": "random_click",
+      "max_attempts": 1
+    }
+  ],
+  "audit": {
+    "record_attempts": true,
+    "artifact_dir": "artifacts/dev5.2.1/recovery_policy"
+  }
+}

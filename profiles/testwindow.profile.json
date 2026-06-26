@@ -1,0 +1,51 @@
+{
+  "profile_name": "testwindow",
+  "app_kind": "local_test_app",
+  "process_match": "TestWindow.exe",
+  "title_match": "Agent Test Window",
+  "window_class_match": "",
+  "allowed_window_scope": "explicit_title_only",
+  "common_locators": [
+    {
+      "name": "click_button",
+      "selector": "uia:name=Click Me,type=Button",
+      "semantic_status": "resolved",
+      "risk_status": "normal",
+      "notes": "Deterministic local TestWindow button."
+    },
+    {
+      "name": "status_text",
+      "selector": "uia:name=Status,type=Text",
+      "semantic_status": "resolved",
+      "risk_status": "normal",
+      "notes": "Read-only status text when available."
+    }
+  ],
+  "roi_definitions": {
+    "status_area": { "relative_rect": [0.05, 0.10, 0.90, 0.25], "purpose": "status OCR fallback" },
+    "button_area": { "relative_rect": [0.05, 0.35, 0.90, 0.50], "purpose": "button search" }
+  },
+  "visual_strategy": {
+    "prefer": ["uia", "ocr", "image_template"],
+    "external_visual_provider": "disabled"
+  },
+  "ocr_strategy": {
+    "default": "roi_first",
+    "full_ocr_fallback": true
+  },
+  "recovery_strategy": {
+    "loading": "wait_observe_loop",
+    "dialog_open": "stop_or_human_confirmation",
+    "element_moved": "re_locate"
+  },
+  "safety_overrides": {
+    "can_relax_safety_manifest": false,
+    "notes": "Profile metadata cannot grant permissions."
+  },
+  "task_templates": [
+    { "name": "click_local_button", "required_locator": "click_button", "requires_confirmation": false }
+  ],
+  "confirmation_nodes": [],
+  "version": "4.5.0",
+  "notes": "Safe local deterministic runtime test profile."
+}

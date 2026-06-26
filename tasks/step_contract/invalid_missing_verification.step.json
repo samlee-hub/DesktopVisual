@@ -1,0 +1,36 @@
+{
+  "schema_version": "5.1.1",
+  "step_id": "invalid_missing_verification",
+  "name": "Invalid step without verification",
+  "preconditions": [
+    {
+      "type": "scene_state",
+      "expected": "normal"
+    }
+  ],
+  "action": {
+    "type": "click_submit_mock",
+    "locator": "id:submit-button"
+  },
+  "timeout_ms": 1000,
+  "retry_policy": {
+    "max_attempts": 0,
+    "backoff_ms": 0
+  },
+  "on_failure": {
+    "strategy": "stop_task",
+    "failure_reason": "VERIFICATION_TIMEOUT"
+  },
+  "safety_requirements": {
+    "permission_profile": "DEFAULT",
+    "allow_unrestricted_desktop": false,
+    "requires_human_confirmation": false
+  },
+  "expected_scene_state": "success",
+  "expected_change_events": [
+    "text_appeared"
+  ],
+  "expected_elements": [
+    "result"
+  ]
+}

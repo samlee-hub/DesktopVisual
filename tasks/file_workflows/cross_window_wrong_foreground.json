@@ -1,0 +1,13 @@
+{
+  "schema_version": "5.5.4",
+  "context_id": "cross_window_wrong_foreground",
+  "parent_task_window": "DesktopVisual Mail Mock",
+  "child_dialog_window": "Open",
+  "events": ["window_changed", "picker_opened", "picker_closed"],
+  "parent_foreground_before": true,
+  "child_foreground_during": true,
+  "returned_to_parent": false,
+  "foreground_verified": false,
+  "focus_restored": false,
+  "wrong_foreground": true
+}

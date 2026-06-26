@@ -1,0 +1,53 @@
+{
+  "profile_name": "local_problem_page",
+  "app_kind": "local_html_fixture",
+  "process_match": "msedge.exe;chrome.exe",
+  "title_match": "DesktopVisual Problem Fixture",
+  "window_class_match": "",
+  "allowed_window_scope": "local_fixture_only",
+  "common_locators": [
+    {
+      "name": "answer_box",
+      "selector": "uia:name=answer,type=Edit",
+      "semantic_status": "resolved",
+      "risk_status": "normal",
+      "notes": "Local fixture answer input only."
+    },
+    {
+      "name": "check_button",
+      "selector": "uia:name=Check,type=Button",
+      "semantic_status": "resolved",
+      "risk_status": "normal",
+      "notes": "Local fixture check button."
+    }
+  ],
+  "roi_definitions": {
+    "problem_statement": { "relative_rect": [0.06, 0.14, 0.88, 0.35], "purpose": "question OCR" },
+    "answer_area": { "relative_rect": [0.06, 0.50, 0.88, 0.28], "purpose": "answer field and feedback" }
+  },
+  "visual_strategy": {
+    "prefer": ["uia", "ocr", "screen_delta"],
+    "external_visual_provider": "disabled"
+  },
+  "ocr_strategy": {
+    "default": "roi_first",
+    "full_ocr_fallback": true
+  },
+  "recovery_strategy": {
+    "loading": "wait_observe_loop",
+    "target_not_ready": "wait_target_ready",
+    "error": "stop"
+  },
+  "safety_overrides": {
+    "can_relax_safety_manifest": false,
+    "notes": "Not for exams, hiring tests, or public assessment submissions."
+  },
+  "task_templates": [
+    { "name": "local_problem_fixture_check", "required_locator": "check_button", "requires_confirmation": false }
+  ],
+  "confirmation_nodes": [
+    { "name": "submit_assessment", "route": "stop" }
+  ],
+  "version": "4.5.0",
+  "notes": "Local mock problem page only; production assessment pages remain out of scope."
+}

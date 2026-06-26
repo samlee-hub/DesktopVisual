@@ -1,0 +1,29 @@
+{
+  "name": "run_local_test_page",
+  "description": "Interact with a pre-opened local test page in an authorized browser window.",
+  "required_permissions": ["target_window", "local_html", "input_mouse", "selector"],
+  "allowed_window": {
+    "title": "${task.target.title}",
+    "process": "${task.target.process}",
+    "requires_unique": true
+  },
+  "expected_result": "The specified page control is clicked and the expected page text is observed.",
+  "failure_behavior": "Stop on window, safety, selector, click, OCR, or expectation failure.",
+  "steps": [
+    {
+      "name": "click_test_page_control",
+      "type": "act",
+      "selector": "${selector}",
+      "action": "click"
+    },
+    {
+      "name": "verify_test_page_text",
+      "type": "wait",
+      "wait_ms": "${wait_ms}",
+      "timeout_ms": "${timeout_ms}",
+      "expect": {
+        "text_contains": "${text}"
+      }
+    }
+  ]
+}

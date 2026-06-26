@@ -1,0 +1,27 @@
+{
+  "schema_version": "5.1.3",
+  "scene_state": {
+    "status": "success"
+  },
+  "change_events": [
+    "text_appeared",
+    "target_ready",
+    "region_changed"
+  ],
+  "region_changed": true,
+  "element_graph": {
+    "nodes": [
+      {
+        "element_id": "submit-button",
+        "role": "button",
+        "text": "Submit"
+      },
+      {
+        "element_id": "result",
+        "role": "text",
+        "text": "Success: local mock form submitted"
+      }
+    ]
+  },
+  "text": "Submit Success: local mock form submitted"
+}

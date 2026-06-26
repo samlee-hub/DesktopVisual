@@ -1,0 +1,50 @@
+{
+  "profile_name": "calculator",
+  "app_kind": "local_desktop_app",
+  "process_match": "Calculator.exe",
+  "title_match": "Calculator",
+  "window_class_match": "ApplicationFrameWindow",
+  "allowed_window_scope": "explicit_title_or_process_match",
+  "common_locators": [
+    {
+      "name": "display",
+      "selector": "uia:type=Text",
+      "semantic_status": "resolved",
+      "risk_status": "normal",
+      "notes": "Read-only calculator display candidates."
+    },
+    {
+      "name": "equals",
+      "selector": "uia:name=Equals,type=Button",
+      "semantic_status": "resolved",
+      "risk_status": "normal",
+      "notes": "Calculator equals button."
+    }
+  ],
+  "roi_definitions": {
+    "display": { "relative_rect": [0.05, 0.05, 0.90, 0.22], "purpose": "display OCR" }
+  },
+  "visual_strategy": {
+    "prefer": ["uia", "ocr"],
+    "external_visual_provider": "disabled"
+  },
+  "ocr_strategy": {
+    "default": "roi_first",
+    "full_ocr_fallback": false
+  },
+  "recovery_strategy": {
+    "loading": "wait_observe_loop",
+    "dialog_open": "stop",
+    "error": "stop"
+  },
+  "safety_overrides": {
+    "can_relax_safety_manifest": false,
+    "notes": "Arithmetic test profile only."
+  },
+  "task_templates": [
+    { "name": "local_calculation", "required_locator": "equals", "requires_confirmation": false }
+  ],
+  "confirmation_nodes": [],
+  "version": "4.5.0",
+  "notes": "Optional safe local calculator profile."
+}

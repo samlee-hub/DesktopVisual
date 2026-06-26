@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DesktopVisual v5.0.1 TaskSession",
+  "type": "object",
+    "required": [
+    "schema_version",
+    "runtime_version",
+    "protocol_version",
+    "task_id",
+    "task_type",
+    "profile",
+    "permission_profile",
+    "capability_profile",
+    "current_state",
+    "started_at",
+    "updated_at",
+    "artifacts",
+    "context",
+    "progress",
+    "states",
+    "result"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "5.0.1"
+    },
+    "runtime_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "protocol_version": {
+      "const": "5.0"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile": {
+      "type": "string"
+    },
+    "permission_profile": {
+      "type": "string",
+      "enum": [
+        "DEFAULT",
+        "FULL_ACCESS"
+      ]
+    },
+    "capability_profile": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "current_state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "waiting",
+        "verifying",
+        "recovering",
+        "confirmed",
+        "completed",
+        "failed",
+        "stopped",
+        "blocked"
+      ]
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "root",
+        "events_jsonl",
+        "result_json",
+        "report_md"
+      ]
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "runtime_mode",
+        "task_goal",
+        "allow_unrestricted_desktop"
+      ]
+    },
+    "progress": {
+      "type": "object",
+      "required": [
+        "total_steps",
+        "completed_steps",
+        "failed_steps"
+      ]
+    },
+    "states": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "transitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "reason"
+        ]
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "task_id",
+        "state",
+        "status",
+        "ok"
+      ]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "task_version": "5.5.6",
+  "task_id": "local_mail_mock_attach_v55",
+  "template_id": "local_mail_mock_compose_attach_no_real_send",
+  "profile": "local_mail_mock",
+  "file_path": "artifacts/dev5.5.1/allowed/mock_attachment.txt",
+  "allowed_roots": "artifacts/dev5.5.1/allowed",
+  "extensions": ".txt,.md",
+  "max_bytes": 4096,
+  "file_picker_flow": "tasks/file_workflows/local_mock_file_picker_success.json",
+  "upload_state": "tasks/file_workflows/local_mail_mock_upload_success.json",
+  "cross_window_context": "tasks/file_workflows/cross_window_success.json",
+  "no_real_send": true
+}

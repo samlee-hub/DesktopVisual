@@ -1,0 +1,61 @@
+{
+  "schema_version": "5.0.1",
+  "runtime_version": "5.8.7",
+  "protocol_version": "5.0",
+  "task_id": "dev5_0_1_invalid_state",
+  "task_type": "schema_smoke",
+  "profile": "testwindow",
+  "permission_profile": "DEFAULT",
+  "capability_profile": [
+    "task_session_schema"
+  ],
+  "current_state": "created",
+  "started_at": "2026-06-08 00:00:00",
+  "updated_at": "2026-06-08 00:00:00",
+  "artifacts": {
+    "root": "artifacts/dev5.0.1",
+    "events_jsonl": "artifacts/dev5.0.1/task_events.jsonl",
+    "result_json": "artifacts/dev5.0.1/task_result.json",
+    "report_md": "artifacts/dev5.0.1/task_report.md"
+  },
+  "context": {
+    "runtime_mode": "STANDARD",
+    "task_goal": "Reject states outside the v5.0.1 TaskState enum.",
+    "target_title": "Agent Test Window",
+    "target_process": "TestWindow.exe",
+    "allow_unrestricted_desktop": false
+  },
+  "progress": {
+    "total_steps": 0,
+    "completed_steps": 0,
+    "failed_steps": 0,
+    "current_step_id": ""
+  },
+  "states": [
+    "pending",
+    "running",
+    "waiting",
+    "verifying",
+    "recovering",
+    "confirmed",
+    "completed",
+    "failed",
+    "stopped",
+    "blocked"
+  ],
+  "steps": [],
+  "result": {
+    "task_id": "dev5_0_1_invalid_state",
+    "state": "created",
+    "status": "not_started",
+    "ok": false,
+    "error_code": "",
+    "message": "Invalid state fixture."
+  },
+  "escalation": {
+    "allowed_reasons": [
+      "semantic_unresolved"
+    ],
+    "provider": "none"
+  }
+}

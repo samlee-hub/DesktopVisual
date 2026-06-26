@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "name": "benchmark_locator_not_found",
+  "target": {
+    "title": "Agent Test Window",
+    "process": "TestWindow.exe"
+  },
+  "budget": {
+    "max_steps": 10,
+    "max_duration_ms": 30000,
+    "max_recoveries": 1
+  },
+  "steps": [
+    {
+      "name": "observe_start",
+      "type": "observe"
+    },
+    {
+      "name": "locate_missing",
+      "type": "locate",
+      "selector": "uia:name=DesktopVisual Benchmark Missing Control 9E7F,type=Button"
+    }
+  ]
+}

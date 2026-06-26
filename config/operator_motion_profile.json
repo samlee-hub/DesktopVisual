@@ -1,0 +1,49 @@
+﻿{
+  "version": 1,
+  "profile_type": "operator_motion_profile",
+  "profile_id": "human-20260602022421",
+  "source": "human",
+  "created_at": "2026-06-02 02:24:21",
+  "created_by": "motion-calibrate",
+  "sample_count": 36,
+  "scenario_count": 12,
+  "quality": "usable",
+  "device_context": {
+    "dpi": "not_collected",
+    "screen_count": 1,
+    "primary_screen_size": "1707x1067",
+    "pointer_speed_note": "not_collected"
+  },
+  "privacy": {
+    "raw_points_stored_in_profile": false,
+    "contains_keyboard_text": false,
+    "contains_screen_content": false
+  },
+  "statistics": {
+    "duration_by_distance": {
+      "duration_ms_avg": 1199.31,
+      "duration_ms_min": 1187.2,
+      "duration_ms_max": 1200,
+      "distance_px_avg": 7.22625
+    },
+    "velocity_curve": {
+      "normalized_progress": [0,0.04,0.13,0.27,0.45,0.64,0.8,0.91,0.98,1]
+    },
+    "acceleration_stats": {},
+    "curvature_stats": {"curvature_px_avg": 1.5},
+    "jitter_stats": {"jitter_px_avg": 0.4},
+    "endpoint_correction": {"endpoint_correction_px_avg": 3}
+  },
+  "duration_ms_avg": 1199.31,
+  "duration_ms_min": 1187.2,
+  "duration_ms_max": 1200,
+  "distance_px_avg": 7.22625,
+  "curvature_px_avg": 1.5,
+  "jitter_px_avg": 0.4,
+  "endpoint_correction_px_avg": 3,
+  "velocity_curve": [0,0.04,0.13,0.27,0.45,0.64,0.8,0.91,0.98,1],
+  "direction_coverage": ["vertical_du","horizontal_lr","horizontal_rl","diagonal_rd_lu"],
+  "distance_coverage": ["short","medium"],
+  "supported_modes": ["operator-human"],
+  "warnings": []
+}

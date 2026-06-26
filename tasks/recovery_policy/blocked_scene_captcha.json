@@ -1,0 +1,10 @@
+{
+  "schema_version": "5.2.4",
+  "scene_state": "blocked",
+  "block_type": "captcha",
+  "risk_level": "high",
+  "screenshot_artifact": "artifacts/dev5.2.4/screenshots/blocked_captcha_mock.bmp",
+  "element_graph_artifact": "artifacts/dev5.2.4/element_graph/blocked_captcha_mock.json",
+  "agent_provider_available": true,
+  "candidates": []
+}

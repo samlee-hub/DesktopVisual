@@ -1,0 +1,32 @@
+{
+  "schema_version": "execution_profile.v1",
+  "profile": "python",
+  "implemented": true,
+  "runtime_start_signals": [
+    "python.exe",
+    "python",
+    ".py",
+    "Running",
+    "Process started",
+    "运行",
+    "正在运行"
+  ],
+  "completion_signals": [
+    "Process finished with exit code",
+    "进程已结束",
+    "退出代码"
+  ],
+  "success_signals": [
+    "exit code 0",
+    "退出代码为 0"
+  ],
+  "failure_signals": [
+    "Traceback",
+    "IndentationError",
+    "SyntaxError",
+    "Exception",
+    "RuntimeError",
+    "exit code 1",
+    "退出代码为 1"
+  ]
+}

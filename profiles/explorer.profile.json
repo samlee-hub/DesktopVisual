@@ -1,0 +1,46 @@
+{
+  "profile_name": "explorer",
+  "app_kind": "local_desktop_app",
+  "process_match": "explorer.exe",
+  "title_match": "File Explorer",
+  "window_class_match": "CabinetWClass",
+  "allowed_window_scope": "explicit_title_or_process_match",
+  "common_locators": [
+    {
+      "name": "address_bar",
+      "selector": "uia:type=Edit",
+      "semantic_status": "resolved",
+      "risk_status": "normal",
+      "notes": "Explorer address/search edit fallback."
+    }
+  ],
+  "roi_definitions": {
+    "address_area": { "relative_rect": [0.10, 0.06, 0.90, 0.18], "purpose": "address bar OCR" },
+    "file_list": { "relative_rect": [0.15, 0.20, 0.82, 0.72], "purpose": "file list OCR" }
+  },
+  "visual_strategy": {
+    "prefer": ["uia", "ocr"],
+    "external_visual_provider": "disabled"
+  },
+  "ocr_strategy": {
+    "default": "changed_region_roi",
+    "full_ocr_fallback": true
+  },
+  "recovery_strategy": {
+    "loading": "wait_observe_loop",
+    "dialog_open": "human_confirmation",
+    "element_moved": "re_locate"
+  },
+  "safety_overrides": {
+    "can_relax_safety_manifest": false,
+    "notes": "File operations remain governed by read/write roots."
+  },
+  "task_templates": [
+    { "name": "inspect_local_folder", "required_locator": "address_bar", "requires_confirmation": false }
+  ],
+  "confirmation_nodes": [
+    { "name": "delete_or_overwrite_dialog", "route": "human_confirmation" }
+  ],
+  "version": "4.5.0",
+  "notes": "Explorer profile is for local allowed roots only."
+}

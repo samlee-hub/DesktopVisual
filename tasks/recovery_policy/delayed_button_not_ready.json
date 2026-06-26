@@ -1,0 +1,13 @@
+{
+  "schema_version": "5.2.2",
+  "mock": "delayed_button",
+  "scene_state": "loading",
+  "target_ready": false,
+  "elements": [
+    {
+      "id": "submit",
+      "role": "button",
+      "enabled": false
+    }
+  ]
+}

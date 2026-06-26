@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DesktopVisual v5.1.1 StepContract",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "step_id",
+    "name",
+    "preconditions",
+    "action",
+    "verification",
+    "timeout_ms",
+    "retry_policy",
+    "on_failure",
+    "safety_requirements",
+    "expected_scene_state",
+    "expected_change_events",
+    "expected_elements"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "5.1.1"
+    },
+    "step_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "preconditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": [
+              "scene_state",
+              "element_exists",
+              "target_ready",
+              "window_focused",
+              "profile_active",
+              "safety_allowed",
+              "capability_available"
+            ]
+          },
+          "expected": {},
+          "element_id": { "type": "string" },
+          "profile": { "type": "string" },
+          "action": { "type": "string" },
+          "capability": { "type": "string" }
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "locator": { "type": "string" },
+        "input_value": { "type": "string" }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["text_appeared", "text_disappeared", "element_appeared", "element_disappeared", "scene_state"]
+        },
+        "expected_text": { "type": "string" },
+        "expected_scene_state": { "type": "string" },
+        "expected_change_events": { "type": "array" },
+        "expected_elements": { "type": "array" }
+      }
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "retry_policy": {
+      "type": "object"
+    },
+    "on_failure": {
+      "type": "object"
+    },
+    "safety_requirements": {
+      "type": "object"
+    },
+    "expected_scene_state": {
+      "type": "string"
+    },
+    "expected_change_events": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "anyOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": { "type": "string" }
+            }
+          }
+        ]
+      }
+    },
+    "expected_elements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "anyOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["element_id"],
+            "properties": {
+              "element_id": { "type": "string" },
+              "condition": {
+                "enum": ["appeared", "disappeared", "exists", "absent"]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

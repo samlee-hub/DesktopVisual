@@ -1,0 +1,10 @@
+{
+  "task_version": "5.4.4",
+  "template_id": "explorer_file_select_mock",
+  "profile": "explorer",
+  "parameters": {
+    "file_path": "artifacts/dev5.4/mock_attachment.txt",
+    "expected_result": "mock_attachment.txt",
+    "output_region": "file_list"
+  }
+}

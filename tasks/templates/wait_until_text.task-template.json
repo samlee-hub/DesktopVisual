@@ -1,0 +1,23 @@
+{
+  "name": "wait_until_text",
+  "description": "Wait briefly and verify text is visible through the existing OCR expectation path.",
+  "required_permissions": ["target_window", "ocr_read"],
+  "allowed_window": {
+    "title": "${task.target.title}",
+    "process": "${task.target.process}",
+    "requires_unique": true
+  },
+  "expected_result": "The requested text is observed in the target window.",
+  "failure_behavior": "Stop on OCR unavailable, OCR failure, timeout, or expectation failure.",
+  "steps": [
+    {
+      "name": "wait_until_text",
+      "type": "wait",
+      "wait_ms": "${wait_ms}",
+      "timeout_ms": "${timeout_ms}",
+      "expect": {
+        "text_contains": "${text}"
+      }
+    }
+  ]
+}

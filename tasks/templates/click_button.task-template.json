@@ -1,0 +1,23 @@
+{
+  "name": "click_button",
+  "description": "Click a uniquely located button selector inside the authorized target window.",
+  "required_permissions": ["target_window", "input_mouse", "selector"],
+  "allowed_window": {
+    "title": "${task.target.title}",
+    "process": "${task.target.process}",
+    "requires_unique": true
+  },
+  "expected_result": "The button is clicked and the optional expected selector remains available.",
+  "failure_behavior": "Stop on window, safety, selector, focus, or action failure. Do not guess nearby coordinates.",
+  "steps": [
+    {
+      "name": "click_button",
+      "type": "act",
+      "selector": "${selector}",
+      "action": "click",
+      "expect": {
+        "selector_exists": "${expect_selector}"
+      }
+    }
+  ]
+}

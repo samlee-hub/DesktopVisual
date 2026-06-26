@@ -1,0 +1,23 @@
+{
+  "name": "save_file",
+  "description": "Send CTRL+S to the authorized target window and optionally verify a safe output file contains expected text.",
+  "required_permissions": ["target_window", "input_keyboard", "write_root", "read_root"],
+  "allowed_window": {
+    "title": "${task.target.title}",
+    "process": "${task.target.process}",
+    "requires_unique": true
+  },
+  "expected_result": "The target application receives CTRL+S and the configured file expectation passes.",
+  "failure_behavior": "Stop on window, safety, focus, hotkey, file-read, or expectation failure.",
+  "steps": [
+    {
+      "name": "save_hotkey",
+      "type": "hotkey",
+      "keys": "CTRL+S",
+      "expect": {
+        "file_contains_path": "${expect_file_contains_path}",
+        "file_contains_text": "${expect_file_contains_text}"
+      }
+    }
+  ]
+}

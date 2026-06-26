@@ -1,0 +1,56 @@
+{
+  "schema_version": "5.4.1",
+  "runtime_version": "5.8.7",
+  "protocol_version": "5.4",
+  "template_id": "local_form_fill_submit",
+  "required_profile": "browser_local",
+  "parameters": [
+    { "name": "local_url", "type": "local_url", "required": true },
+    { "name": "field_value", "type": "string", "required": true },
+    { "name": "expected_result", "type": "string", "required": true },
+    { "name": "output_region", "type": "roi", "required": true }
+  ],
+  "states": ["pending", "running", "waiting", "verifying", "completed", "failed", "blocked"],
+  "preconditions": [
+    { "type": "profile_window_scope", "value": "local_content_only" },
+    { "type": "local_url_only", "parameter": "local_url" }
+  ],
+  "steps": [
+    {
+      "step_id": "open_local_page",
+      "action": "open_local_html",
+      "uses_parameters": ["local_url"],
+      "roi_ref": "viewport"
+    },
+    {
+      "step_id": "fill_field",
+      "action": "type_text",
+      "locator_ref": "address_bar",
+      "uses_parameters": ["field_value"]
+    },
+    {
+      "step_id": "verify_success",
+      "action": "verify_text",
+      "roi_ref": "viewport",
+      "uses_parameters": ["expected_result", "output_region"]
+    }
+  ],
+  "verification": {
+    "type": "profile_bound_text",
+    "expected_parameter": "expected_result",
+    "roi_parameter": "output_region"
+  },
+  "recovery": {
+    "use_profile_recovery_strategy": true,
+    "max_retries": 1,
+    "safe_stop_on_unresolved": true
+  },
+  "confirmation_nodes": [],
+  "final_state_policy": {
+    "success_state": "completed",
+    "failure_state": "failed",
+    "blocked_state": "blocked",
+    "profile_can_override_safety": false
+  },
+  "allow_unrestricted_desktop": false
+}

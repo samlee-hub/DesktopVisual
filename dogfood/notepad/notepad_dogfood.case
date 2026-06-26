@@ -1,0 +1,20 @@
+case_version=2
+# Notepad dogfood - type text and verify
+
+target_title="Notepad"
+wait ms=500
+
+# Focus and type unique text
+type text="DV_DOGFOOD_NOTEPAD_UNIQUE_MARKER_12345"
+wait ms=500
+
+# Select all and verify via clipboard
+hotkey keys="CTRL+A"
+wait ms=200
+hotkey keys="CTRL+C"
+wait ms=200
+
+# Read clipboard state via file check would need file output
+# Instead: save to temp file and verify
+hotkey keys="CTRL+S"
+wait ms=500

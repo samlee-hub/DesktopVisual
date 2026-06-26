@@ -1,0 +1,11 @@
+{
+  "task_version": "5.4.4",
+  "template_id": "local_form_fill_submit",
+  "profile": "browser_local",
+  "parameters": {
+    "local_url": "file://D:/desktopvisual/dogfood/local_html/v5_local_form_fill_submit_mock.html",
+    "field_value": "desktopvisual-v5.4",
+    "expected_result": "Success: local mock form submitted",
+    "output_region": "viewport"
+  }
+}

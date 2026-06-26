@@ -1,0 +1,63 @@
+{
+  "schema_version": "5.2.1",
+  "policy_id": "standard_task_recovery",
+  "task_type": "local_form_fill_submit_mock",
+  "permission_profile": "DEFAULT",
+  "retry_budget": {
+    "max_attempts": 3,
+    "max_total_recovery_ms": 1500,
+    "max_wait_ms": 1500,
+    "backoff_ms": 100
+  },
+  "routes": [
+    {
+      "failure_reason": "TARGET_NOT_READY",
+      "strategy": "wait_and_retry",
+      "max_attempts": 2
+    },
+    {
+      "failure_reason": "TEXT_NOT_FOUND",
+      "strategy": "re_observe",
+      "max_attempts": 1
+    },
+    {
+      "failure_reason": "LOCATOR_NOT_FOUND",
+      "strategy": "re_locate",
+      "max_attempts": 1
+    },
+    {
+      "failure_reason": "STALE_CANDIDATE",
+      "strategy": "invalidate_cache",
+      "max_attempts": 1
+    },
+    {
+      "failure_reason": "PROFILE_MISMATCH",
+      "strategy": "use_profile_fallback",
+      "max_attempts": 1
+    },
+    {
+      "failure_reason": "MULTIPLE_CANDIDATES_LOW_CONFIDENCE",
+      "strategy": "use_visual_provider",
+      "max_attempts": 1
+    },
+    {
+      "failure_reason": "UNKNOWN_SCENE",
+      "strategy": "ask_user",
+      "max_attempts": 0
+    },
+    {
+      "failure_reason": "SEMANTIC_UNRESOLVED",
+      "strategy": "escalate_to_agent",
+      "max_attempts": 0
+    },
+    {
+      "failure_reason": "SAFETY_DENIED",
+      "strategy": "stop",
+      "max_attempts": 0
+    }
+  ],
+  "audit": {
+    "record_attempts": true,
+    "artifact_dir": "artifacts/dev5.2.1/recovery_policy"
+  }
+}

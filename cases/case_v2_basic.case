@@ -1,0 +1,15 @@
+case_version=2
+# Case v2 basic test - click and type with key=value syntax
+target_title="Agent Test Window"
+screenshot out="${PROJECT_ROOT}\artifacts\before.bmp"
+click x=80 y=90 move_mode="instant"
+wait ms=300
+press key="SPACE"
+wait ms=300
+click x=90 y=150 move_mode="instant"
+type text="hello"
+wait ms=500
+read_file path="D:\testrepo\testwindow\runtime\state.txt"
+assert_file_contains path="D:\testrepo\testwindow\runtime\state.txt" text="clicks="
+assert_file_contains path="D:\testrepo\testwindow\runtime\state.txt" text="last_text=hello"
+screenshot out="${PROJECT_ROOT}\artifacts\after.bmp"

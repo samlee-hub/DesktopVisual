@@ -1,0 +1,7 @@
+{
+  "schema_version": "5.2.2",
+  "mock": "delayed_text",
+  "scene_state": "normal",
+  "text_found": false,
+  "expected_text": "Success: local mock form submitted"
+}

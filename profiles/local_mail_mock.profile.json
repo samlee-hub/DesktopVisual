@@ -1,0 +1,57 @@
+{
+  "profile_name": "local_mail_mock",
+  "app_kind": "local_html_fixture",
+  "process_match": "msedge.exe;chrome.exe",
+  "title_match": "DesktopVisual Mail Mock",
+  "window_class_match": "",
+  "allowed_window_scope": "local_fixture_only",
+  "common_locators": [
+    {
+      "name": "compose_button",
+      "selector": "uia:name=Compose,type=Button",
+      "semantic_status": "resolved",
+      "risk_status": "normal",
+      "notes": "Local mail mock compose button."
+    },
+    {
+      "name": "mock_send_button",
+      "selector": "uia:name=Send Mock,type=Button",
+      "semantic_status": "resolved",
+      "risk_status": "normal",
+      "notes": "Mock send only; no real email."
+    }
+  ],
+  "roi_definitions": {
+    "compose_area": { "relative_rect": [0.08, 0.18, 0.84, 0.46], "purpose": "compose editor OCR" },
+    "attachment_area": { "relative_rect": [0.08, 0.66, 0.84, 0.14], "purpose": "mock attachment status" },
+    "send_button_area": { "relative_rect": [0.72, 0.82, 0.20, 0.10], "purpose": "mock send readiness" },
+    "error_banner": { "relative_rect": [0.08, 0.08, 0.84, 0.08], "purpose": "mock error banner" }
+  },
+  "visual_strategy": {
+    "prefer": ["uia", "ocr", "screen_delta", "image_template"],
+    "external_visual_provider": "disabled"
+  },
+  "ocr_strategy": {
+    "default": "changed_region_roi",
+    "full_ocr_fallback": true
+  },
+  "recovery_strategy": {
+    "loading": "wait_observe_loop",
+    "dialog_open": "human_confirmation",
+    "error": "stop_or_human_confirmation"
+  },
+  "safety_overrides": {
+    "can_relax_safety_manifest": false,
+    "notes": "Real email sending remains blocked unless an explicit future permission profile allows it."
+  },
+  "task_templates": [
+    { "name": "compose_mock_message", "required_locator": "compose_button", "requires_confirmation": false },
+    { "name": "send_mock_message", "required_locator": "mock_send_button", "requires_confirmation": true }
+  ],
+  "confirmation_nodes": [
+    { "name": "real_recipient_detected", "route": "stop" },
+    { "name": "external_attachment", "route": "human_confirmation" }
+  ],
+  "version": "4.5.0",
+  "notes": "Local mail mock profile; not Gmail, Outlook, or a real-account profile."
+}

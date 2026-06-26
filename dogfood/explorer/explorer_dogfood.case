@@ -1,0 +1,4 @@
+case_version=2
+# Explorer dogfood - create and verify temp directory
+
+set name="tmpdir" value="${PROJECT_ROOT}\artifacts\dogfood\explorer\tmp_${RANDOM}"

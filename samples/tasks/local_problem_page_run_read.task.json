@@ -1,0 +1,11 @@
+{
+  "task_version": "5.4.4",
+  "template_id": "local_problem_page_run_read",
+  "profile": "local_problem_page",
+  "parameters": {
+    "local_url": "file://D:/desktopvisual/dogfood/local_html/local_problem_page.html",
+    "body": "42",
+    "expected_result": "Correct",
+    "output_region": "answer_area"
+  }
+}

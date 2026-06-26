@@ -1,0 +1,7 @@
+{
+  "recipient": "qa@example.invalid",
+  "body": "Missing subject fixture.",
+  "file_path": "artifacts/dev5.4/mock_attachment.txt",
+  "expected_result": "Mock send ready",
+  "output_region": "send_button_area"
+}

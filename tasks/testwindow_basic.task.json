@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "name": "testwindow_basic",
+  "target": {
+    "title": "Agent Test Window",
+    "process": "TestWindow.exe"
+  },
+  "budget": {
+    "max_steps": 50,
+    "max_duration_ms": 120000,
+    "max_recoveries": 2
+  },
+  "steps": [
+    {
+      "name": "observe_start",
+      "type": "observe"
+    },
+    {
+      "name": "locate_button",
+      "type": "locate",
+      "selector": "uia:name=Click Me"
+    },
+    {
+      "name": "click_button",
+      "type": "act",
+      "selector": "uia:name=Click Me,type=Button",
+      "action": "click",
+      "expect": {
+        "selector_exists": "uia:name=Click Me"
+      }
+    }
+  ]
+}

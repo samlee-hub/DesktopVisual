@@ -1,0 +1,18 @@
+{
+  "name": "open_app",
+  "description": "Confirm a pre-authorized application window is already open and uniquely matched.",
+  "required_permissions": ["target_window"],
+  "allowed_window": {
+    "title": "${task.target.title}",
+    "process": "${task.target.process}",
+    "requires_unique": true
+  },
+  "expected_result": "The authorized target window is observed. This template does not launch arbitrary executables.",
+  "failure_behavior": "Stop with WINDOW_NOT_FOUND or WINDOW_NOT_UNIQUE if the authorized app is not already available.",
+  "steps": [
+    {
+      "name": "observe_open_app",
+      "type": "observe"
+    }
+  ]
+}

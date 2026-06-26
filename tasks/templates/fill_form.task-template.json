@@ -1,0 +1,25 @@
+{
+  "name": "fill_form",
+  "description": "Type text into a uniquely located form field in the authorized target window.",
+  "required_permissions": ["target_window", "input_mouse", "input_keyboard", "selector"],
+  "allowed_window": {
+    "title": "${task.target.title}",
+    "process": "${task.target.process}",
+    "requires_unique": true
+  },
+  "expected_result": "The target field receives the requested text and the configured expected file state is observed.",
+  "failure_behavior": "Stop on window, safety, selector, focus, type, or expectation failure.",
+  "steps": [
+    {
+      "name": "fill_field",
+      "type": "act",
+      "selector": "${field_selector}",
+      "action": "type",
+      "text": "${text}",
+      "expect": {
+        "file_contains_path": "${expect_file_contains_path}",
+        "file_contains_text": "${expect_file_contains_text}"
+      }
+    }
+  ]
+}

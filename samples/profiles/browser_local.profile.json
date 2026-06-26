@@ -1,0 +1,5 @@
+{
+  "profile_name": "browser_local",
+  "inherits_from": "profiles/browser_local.profile.json",
+  "sample_scope": "local_content_only"
+}

@@ -1,0 +1,12 @@
+target_title=Agent Test Window
+screenshot ${PROJECT_ROOT}\artifacts\visible_before.bmp
+click 80 90 human 1000
+wait 300
+press SPACE
+wait 300
+click 90 150 human 1000
+type hello human 120
+wait 500
+read_file D:\testrepo\testwindow\runtime\state.txt
+assert_file_contains D:\testrepo\testwindow\runtime\state.txt last_text=hello
+screenshot ${PROJECT_ROOT}\artifacts\visible_after.bmp

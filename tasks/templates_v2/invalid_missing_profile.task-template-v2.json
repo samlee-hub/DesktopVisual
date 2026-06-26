@@ -1,0 +1,19 @@
+{
+  "schema_version": "5.4.1",
+  "runtime_version": "5.8.7",
+  "protocol_version": "5.4",
+  "template_id": "invalid_missing_profile",
+  "parameters": [],
+  "states": ["pending", "running", "completed", "failed"],
+  "steps": [],
+  "preconditions": [],
+  "verification": {},
+  "recovery": {},
+  "confirmation_nodes": [],
+  "final_state_policy": {
+    "success_state": "completed",
+    "failure_state": "failed",
+    "profile_can_override_safety": false
+  },
+  "allow_unrestricted_desktop": false
+}

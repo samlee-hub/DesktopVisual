@@ -1,0 +1,236 @@
+{
+  "schema_version": "5.0.1",
+  "runtime_version": "5.10.2",
+  "protocol_version": "5.0",
+  "task_id": "localhost_form_fill_submit_humanmode_flow",
+  "task_type": "localhost_form_fill_submit_humanmode",
+  "profile": "browser_localhost_mail_mock",
+  "permission_profile": "DEVELOPER_CAPABILITY_DISCOVERY",
+  "capability_profile": [
+    "task_session_schema",
+    "step_contract",
+    "task_runner_bridge",
+    "adaptive_humanmode_loop",
+    "browser_form_locator",
+    "humanmode_browser_interaction",
+    "verification_engine",
+    "localhost_only"
+  ],
+  "current_state": "pending",
+  "started_at": "2026-06-10 00:00:00",
+  "updated_at": "2026-06-10 00:00:00",
+  "artifacts": {
+    "root": "artifacts/dev5.10.2_real_taskruntime_final_gate/task_runtime/localhost_form_fill_submit_humanmode",
+    "events_jsonl": "artifacts/dev5.10.2_real_taskruntime_final_gate/task_runtime/localhost_form_fill_submit_humanmode/task_events.jsonl",
+    "result_json": "artifacts/dev5.10.2_real_taskruntime_final_gate/task_runtime/localhost_form_fill_submit_humanmode/task_result.json",
+    "report_md": "artifacts/dev5.10.2_real_taskruntime_final_gate/task_runtime/localhost_form_fill_submit_humanmode/task_report.md"
+  },
+  "context": {
+    "runtime_mode": "STANDARD",
+    "task_goal": "Open a localhost DesktopVisual mail mock page, fill Recipient, Subject, and Body through Adaptive HumanMode, click Send, and verify status plus cleared fields.",
+    "target_title": "DesktopVisual Local Mail Mock",
+    "target_process": "msedge.exe",
+    "allow_unrestricted_desktop": false,
+    "localhost_url": "http://127.0.0.1:51210/mail_mock.html",
+    "server_bind_host": "127.0.0.1",
+    "forbid_bind_host": "0.0.0.0",
+    "recipient_value": "xiaoming",
+    "subject_value": "desktopvisual test",
+    "body_value": "this is a testing message",
+    "success_text": "Mock sent successfully"
+  },
+  "progress": {
+    "total_steps": 19,
+    "completed_steps": 0,
+    "failed_steps": 0,
+    "current_step_id": "start_localhost_http_server"
+  },
+  "states": [
+    "pending",
+    "running",
+    "waiting",
+    "verifying",
+    "recovering",
+    "confirmed",
+    "completed",
+    "failed",
+    "stopped",
+    "blocked"
+  ],
+  "steps": [
+    {
+      "step_id": "start_localhost_http_server",
+      "precondition": "TaskRuntime owns a localhost-only HTTP listener setup step.",
+      "action": "start_localhost_http_server",
+      "verification": "server binds 127.0.0.1 only",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_LOCALHOST_SERVER"
+    },
+    {
+      "step_id": "open_browser_humanmode_address_bar_navigation",
+      "precondition": "localhost server is listening on 127.0.0.1",
+      "action": "open Chrome or Edge and navigate by HumanMode address bar input",
+      "verification": "foreground browser title or observable page text matches DesktopVisual Local Mail Mock",
+      "timeout_ms": 20000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_BROWSER_NAVIGATION"
+    },
+    {
+      "step_id": "locate_recipient",
+      "action": "adaptive_locate browser_field Recipient",
+      "verification": "Recipient field rect is visible and locator-derived",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_FIELD_LOCATOR"
+    },
+    {
+      "step_id": "click_recipient",
+      "action": "adaptive_humanmode_click Recipient",
+      "verification": "cursor_inside_target_rect_before_click true",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_FIELD_LOCATOR"
+    },
+    {
+      "step_id": "type_recipient",
+      "action": "humanmode_type xiaoming",
+      "verification": "keyboard action result ok",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_VERIFICATION"
+    },
+    {
+      "step_id": "verify_recipient_text",
+      "action": "verification_engine_check Recipient value",
+      "verification": "Recipient UIA value equals xiaoming",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_VERIFICATION"
+    },
+    {
+      "step_id": "locate_subject",
+      "action": "adaptive_locate browser_field Subject",
+      "verification": "Subject field rect is visible and locator-derived",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_FIELD_LOCATOR"
+    },
+    {
+      "step_id": "click_subject",
+      "action": "adaptive_humanmode_click Subject",
+      "verification": "cursor_inside_target_rect_before_click true",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_FIELD_LOCATOR"
+    },
+    {
+      "step_id": "type_subject",
+      "action": "humanmode_type desktopvisual test",
+      "verification": "keyboard action result ok",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_VERIFICATION"
+    },
+    {
+      "step_id": "verify_subject_text",
+      "action": "verification_engine_check Subject value",
+      "verification": "Subject UIA value equals desktopvisual test",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_VERIFICATION"
+    },
+    {
+      "step_id": "locate_body",
+      "action": "adaptive_locate browser_field Body",
+      "verification": "Body textarea rect is visible and locator-derived",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_FIELD_LOCATOR"
+    },
+    {
+      "step_id": "click_body",
+      "action": "adaptive_humanmode_click Body",
+      "verification": "cursor_inside_target_rect_before_click true",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_FIELD_LOCATOR"
+    },
+    {
+      "step_id": "type_body",
+      "action": "humanmode_type this is a testing message",
+      "verification": "keyboard action result ok",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_VERIFICATION"
+    },
+    {
+      "step_id": "verify_body_text",
+      "action": "verification_engine_check Body value",
+      "verification": "Body UIA value equals this is a testing message",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_VERIFICATION"
+    },
+    {
+      "step_id": "locate_send",
+      "action": "adaptive_locate browser_button Send",
+      "verification": "Send button rect is visible and locator-derived",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_SEND_BUTTON"
+    },
+    {
+      "step_id": "click_send",
+      "action": "adaptive_humanmode_click Send",
+      "verification": "cursor_inside_target_rect_before_click true and actual click sent",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_SEND_BUTTON"
+    },
+    {
+      "step_id": "verify_mock_sent_successfully",
+      "action": "verification_engine_check status text",
+      "verification": "Mock sent successfully visible in observe/read-window-text evidence",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_VERIFICATION"
+    },
+    {
+      "step_id": "verify_fields_cleared",
+      "action": "verification_engine_check cleared field values",
+      "verification": "Recipient, Subject, and Body UIA values are empty",
+      "timeout_ms": 5000,
+      "on_failure": "stop",
+      "failure_reason": "FAIL_TASKRUNTIME_VERIFICATION"
+    },
+    {
+      "step_id": "stop_localhost_http_server",
+      "action": "stop_localhost_http_server",
+      "verification": "localhost server stopped",
+      "timeout_ms": 5000,
+      "on_failure": "record_failure",
+      "failure_reason": "FAIL_TASKRUNTIME_LOCALHOST_SERVER"
+    }
+  ],
+  "result": {
+    "task_id": "localhost_form_fill_submit_humanmode_flow",
+    "state": "pending",
+    "status": "not_started",
+    "ok": false,
+    "error_code": "",
+    "message": "Real HumanMode TaskRuntime browser flow. Runtime execution may complete, but PASS is decided only by v5_10_2_taskruntime_evidence_verifier.ps1."
+  },
+  "escalation": {
+    "allowed_reasons": [
+      "semantic_unresolved",
+      "unknown_scene",
+      "unexpected_dialog",
+      "multiple_candidates_low_confidence",
+      "profile_mismatch",
+      "task_replanning_needed",
+      "user_confirmation_required"
+    ],
+    "provider": "none"
+  }
+}

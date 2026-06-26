@@ -1,0 +1,30 @@
+{
+  "schema_version": "5.1.2",
+  "scene_state": {
+    "status": "normal"
+  },
+  "target_ready": true,
+  "window": {
+    "focused": true
+  },
+  "profile": {
+    "active": "browser_local"
+  },
+  "safety": {
+    "allowed_actions": [
+      "click_submit_mock"
+    ]
+  },
+  "capabilities": [
+    "minimal_task_session_runner"
+  ],
+  "element_graph": {
+    "nodes": [
+      {
+        "element_id": "result",
+        "role": "text",
+        "text": ""
+      }
+    ]
+  }
+}

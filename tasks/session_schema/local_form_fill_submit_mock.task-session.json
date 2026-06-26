@@ -1,0 +1,128 @@
+{
+  "schema_version": "5.0.1",
+  "runtime_version": "5.8.7",
+  "protocol_version": "5.0",
+  "task_id": "dev5_0_3_local_form_fill_submit_mock",
+  "task_type": "local_form_fill_submit_mock",
+  "profile": "browser_local",
+  "permission_profile": "DEFAULT",
+  "capability_profile": [
+    "task_session_schema",
+    "task_state_machine_core",
+    "minimal_task_runner",
+    "local_mock_html"
+  ],
+  "current_state": "pending",
+  "started_at": "2026-06-08 00:00:00",
+  "updated_at": "2026-06-08 00:00:00",
+  "artifacts": {
+    "root": "artifacts/dev5.0.3/local_form_fill_submit_mock",
+    "events_jsonl": "artifacts/dev5.0.3/local_form_fill_submit_mock/step_events.jsonl",
+    "result_json": "artifacts/dev5.0.3/local_form_fill_submit_mock/task_progress.json",
+    "report_md": "artifacts/dev5.0.3/local_form_fill_submit_mock/task_report.md"
+  },
+  "context": {
+    "runtime_mode": "STANDARD",
+    "task_goal": "Fill one field in a local mock HTML fixture, submit the mock form, and verify success text.",
+    "target_title": "local mock html",
+    "target_process": "none",
+    "allow_unrestricted_desktop": false,
+    "local_html_path": "dogfood/local_html/v5_local_form_fill_submit_mock.html",
+    "form_field_id": "answer",
+    "form_value": "desktopvisual-v5",
+    "submit_control_id": "submit-button",
+    "success_text": "Success: local mock form submitted"
+  },
+  "progress": {
+    "total_steps": 4,
+    "completed_steps": 0,
+    "failed_steps": 0,
+    "current_step_id": "open_local_page"
+  },
+  "states": [
+    "pending",
+    "running",
+    "waiting",
+    "verifying",
+    "recovering",
+    "confirmed",
+    "completed",
+    "failed",
+    "stopped",
+    "blocked"
+  ],
+  "steps": [
+    {
+      "step_id": "open_local_page",
+      "contract": {
+        "action": "open_local_page",
+        "expected_state": "running"
+      },
+      "verification": {
+        "type": "file_contains",
+        "expected": "data-dv-fixture=\"local_form_fill_submit_mock\"",
+        "timeout_ms": 1000
+      }
+    },
+    {
+      "step_id": "wait_form_ready",
+      "contract": {
+        "action": "wait_form_ready",
+        "locator": "id:answer",
+        "expected_state": "waiting"
+      },
+      "verification": {
+        "type": "file_contains",
+        "expected": "id=\"answer\"",
+        "timeout_ms": 1000
+      }
+    },
+    {
+      "step_id": "fill_one_field",
+      "contract": {
+        "action": "fill_field",
+        "locator": "id:answer",
+        "value": "desktopvisual-v5",
+        "expected_state": "running"
+      },
+      "verification": {
+        "type": "value_present",
+        "expected": "desktopvisual-v5",
+        "timeout_ms": 1000
+      }
+    },
+    {
+      "step_id": "click_submit_and_verify",
+      "contract": {
+        "action": "click_submit_mock",
+        "locator": "id:submit-button",
+        "expected_state": "verifying"
+      },
+      "verification": {
+        "type": "text_contains",
+        "expected": "Success: local mock form submitted",
+        "timeout_ms": 1000
+      }
+    }
+  ],
+  "result": {
+    "task_id": "dev5_0_3_local_form_fill_submit_mock",
+    "state": "pending",
+    "status": "not_started",
+    "ok": false,
+    "error_code": "",
+    "message": "Minimal runner fixture."
+  },
+  "escalation": {
+    "allowed_reasons": [
+      "semantic_unresolved",
+      "unknown_scene",
+      "unexpected_dialog",
+      "multiple_candidates_low_confidence",
+      "profile_mismatch",
+      "task_replanning_needed",
+      "user_confirmation_required"
+    ],
+    "provider": "none"
+  }
+}

@@ -1,0 +1,6 @@
+target_title=鏃犳爣棰?- 璁颁簨鏈?screenshot ${PROJECT_ROOT}\artifacts\real_app_before.bmp
+click 90 120 human 900
+wait 300
+type dogfood_v015 human 90
+wait 700
+screenshot ${PROJECT_ROOT}\artifacts\real_app_after.bmp

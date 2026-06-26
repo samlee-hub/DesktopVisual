@@ -1,0 +1,27 @@
+{
+  "name": "open_local_html",
+  "description": "Confirm a pre-opened local HTML page is visible in an authorized browser window.",
+  "required_permissions": ["target_window", "local_html"],
+  "allowed_window": {
+    "title": "${task.target.title}",
+    "process": "${task.target.process}",
+    "requires_unique": true
+  },
+  "expected_result": "The local HTML page window is observed and optional page text is verified.",
+  "failure_behavior": "Stop on window or expectation failure. This template does not browse remote URLs.",
+  "steps": [
+    {
+      "name": "observe_local_html",
+      "type": "observe"
+    },
+    {
+      "name": "verify_local_html_text",
+      "type": "wait",
+      "wait_ms": "${wait_ms}",
+      "timeout_ms": "${timeout_ms}",
+      "expect": {
+        "text_contains": "${text}"
+      }
+    }
+  ]
+}

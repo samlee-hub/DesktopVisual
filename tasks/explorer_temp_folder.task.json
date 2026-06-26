@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "explorer_temp_folder",
+  "target": {
+    "title": "mvp_explorer_work",
+    "process": "explorer.exe"
+  },
+  "budget": {
+    "max_steps": 20,
+    "max_duration_ms": 30000,
+    "max_recoveries": 0
+  },
+  "steps": [
+    {
+      "name": "verify_filesystem",
+      "type": "observe"
+    }
+  ]
+}

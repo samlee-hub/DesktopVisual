@@ -1,0 +1,21 @@
+case_version=2
+# Case v2 expect success test
+# All expect assertions should pass on a properly running TestWindow
+
+target_title="Agent Test Window"
+
+# Wait for window to be ready
+wait ms=500
+
+# expect selector_exists should find the Click Me button
+expect selector_exists="uia:name=Click Me"
+
+# Click the button first to generate state
+click x=80 y=90 move_mode="instant"
+wait ms=300
+
+# expect file_contains should pass after clicking
+expect file_contains path="D:\testrepo\testwindow\runtime\state.txt" text="clicks="
+
+# expect active_window_title_contains should pass
+expect active_window_title_contains="Agent Test Window"

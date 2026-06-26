@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DesktopVisual App Profile",
+  "type": "object",
+  "required": [
+    "profile_name",
+    "app_kind",
+    "process_match",
+    "title_match",
+    "allowed_window_scope",
+    "common_locators",
+    "roi_definitions",
+    "visual_strategy",
+    "ocr_strategy",
+    "recovery_strategy",
+    "safety_overrides",
+    "task_templates",
+    "confirmation_nodes",
+    "version",
+    "notes"
+  ],
+  "properties": {
+    "profile_name": { "type": "string" },
+    "app_kind": { "type": "string" },
+    "process_match": { "type": "string" },
+    "title_match": { "type": "string" },
+    "window_class_match": { "type": "string" },
+    "allowed_window_scope": { "type": "string" },
+    "common_locators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "selector"],
+        "properties": {
+          "name": { "type": "string" },
+          "selector": { "type": "string" },
+          "semantic_status": { "type": "string" },
+          "risk_status": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "roi_definitions": { "type": "object" },
+    "visual_strategy": { "type": "object" },
+    "ocr_strategy": { "type": "object" },
+    "recovery_strategy": { "type": "object" },
+    "safety_overrides": { "type": "object" },
+    "task_templates": { "type": "array" },
+    "confirmation_nodes": { "type": "array" },
+    "version": { "type": "string" },
+    "notes": { "type": "string" }
+  },
+  "additionalProperties": true
+}

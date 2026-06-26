@@ -1,0 +1,8 @@
+{
+  "schema_version": "5.2.2",
+  "mock": "stale_candidate",
+  "scene_state": "normal",
+  "cache_state": "stale",
+  "candidate_id": "submit@old-frame",
+  "element_graph_version": "before-repaint"
+}

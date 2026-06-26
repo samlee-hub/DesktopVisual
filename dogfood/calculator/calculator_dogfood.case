@@ -1,0 +1,13 @@
+case_version=2
+# Calculator dogfood - compute 12+30=42 via keyboard
+
+target_title="Calculator"
+wait ms=1000
+
+# Clear and input calculation
+hotkey keys="ESC"
+wait ms=300
+type text="12+30"
+wait ms=300
+press key="ENTER"
+wait ms=500

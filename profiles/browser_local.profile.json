@@ -1,0 +1,46 @@
+{
+  "profile_name": "browser_local",
+  "app_kind": "local_browser",
+  "process_match": "msedge.exe;chrome.exe",
+  "title_match": "localhost;file://;DesktopVisual",
+  "window_class_match": "",
+  "allowed_window_scope": "local_content_only",
+  "common_locators": [
+    {
+      "name": "address_bar",
+      "selector": "uia:type=Edit",
+      "semantic_status": "resolved",
+      "risk_status": "normal",
+      "notes": "Browser chrome edit; execution still requires safety policy."
+    }
+  ],
+  "roi_definitions": {
+    "viewport": { "relative_rect": [0.00, 0.14, 1.00, 0.86], "purpose": "local page observation" },
+    "top_bar": { "relative_rect": [0.00, 0.00, 1.00, 0.14], "purpose": "local URL/status observation" }
+  },
+  "visual_strategy": {
+    "prefer": ["uia", "ocr", "screen_delta", "image_template"],
+    "external_visual_provider": "unavailable_by_default"
+  },
+  "ocr_strategy": {
+    "default": "changed_region_roi",
+    "full_ocr_fallback": true
+  },
+  "recovery_strategy": {
+    "loading": "wait_observe_loop",
+    "dialog_open": "safe_dialog_route",
+    "error": "stop_or_human_confirmation"
+  },
+  "safety_overrides": {
+    "can_relax_safety_manifest": false,
+    "notes": "Real account pages and high-risk submissions remain blocked."
+  },
+  "task_templates": [
+    { "name": "observe_local_page", "required_locator": "address_bar", "requires_confirmation": false }
+  ],
+  "confirmation_nodes": [
+    { "name": "external_navigation", "route": "human_confirmation" }
+  ],
+  "version": "4.5.0",
+  "notes": "Local browser pages only; not a real web account automation profile."
+}

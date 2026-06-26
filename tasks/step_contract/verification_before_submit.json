@@ -1,0 +1,18 @@
+{
+  "schema_version": "5.1.3",
+  "scene_state": {
+    "status": "normal"
+  },
+  "change_events": [],
+  "region_changed": false,
+  "element_graph": {
+    "nodes": [
+      {
+        "element_id": "submit-button",
+        "role": "button",
+        "text": "Submit"
+      }
+    ]
+  },
+  "text": "Submit"
+}

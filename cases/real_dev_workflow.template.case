@@ -1,0 +1,19 @@
+# Real development workflow template.
+# Copy this file inside ${PROJECT_ROOT}\cases and replace every USER_APPROVED_* placeholder.
+# Do not point read_file/assert_file_contains at a real project path until the user approves that path.
+
+target_title=USER_APPROVED_WINDOW_TITLE
+screenshot ${PROJECT_ROOT}\artifacts\real_dev_before.bmp
+
+# Choose one locator/action style after the target window is authorized:
+# uia_click AuthorizedControlName
+# uia_type AuthorizedInputName hello
+# click 80 90 human 800
+# press SPACE
+
+wait 500
+screenshot ${PROJECT_ROOT}\artifacts\real_dev_after.bmp
+
+# Optional, only after the state file path is user-approved:
+# read_file USER_APPROVED_STATE_FILE
+# assert_file_contains USER_APPROVED_STATE_FILE USER_APPROVED_EXPECTED_TEXT

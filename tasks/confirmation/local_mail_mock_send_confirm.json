@@ -1,0 +1,13 @@
+{
+  "schema_version": "5.3.4",
+  "flow_id": "local_mail_mock_send_confirm",
+  "action": "send email",
+  "target_window": "Local Mail Mock",
+  "recipient": "qa@example.invalid",
+  "subject": "DesktopVisual local confirmation mock",
+  "body_summary": "Local mock message for confirmation flow smoke test.",
+  "attachment": "artifacts/dev5.3.4/mock_attachment.txt",
+  "screenshot": "artifacts/dev5.3.4/screenshots/pre_send_review.bmp",
+  "timeout_ms": 30000,
+  "expected_sent_state": "mock_sent"
+}

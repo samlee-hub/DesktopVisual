@@ -1,0 +1,8 @@
+{
+  "recipient": "qa@example.invalid",
+  "subject": "DesktopVisual v5.4 mock",
+  "body": "This is a local mock message. No real send is allowed.",
+  "file_path": "artifacts/dev5.4/mock_attachment.txt",
+  "expected_result": "Mock send ready",
+  "output_region": "send_button_area"
+}

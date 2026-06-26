@@ -1,0 +1,15 @@
+{
+  "schema_version": "5.5.3",
+  "state_id": "local_mail_mock_upload_timeout",
+  "file_name": "mock_attachment.txt",
+  "file_name_visible": true,
+  "upload_started": true,
+  "spinner_detected": true,
+  "progress_detected": true,
+  "spinner_gone": false,
+  "upload_completed": false,
+  "upload_failed": false,
+  "file_too_large": false,
+  "retry_shown": false,
+  "no_real_send": true
+}

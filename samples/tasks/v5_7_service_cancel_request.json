@@ -1,0 +1,7 @@
+{
+  "endpoint": "/cancel_task",
+  "body": {
+    "task_id": "dev5_0_4_local_form_fill_submit_mock_audit",
+    "reason": "user cancel"
+  }
+}

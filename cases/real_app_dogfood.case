@@ -1,0 +1,8 @@
+# run_dogfood.ps1 resolves {{TARGET_TITLE}} to the uniquely matched real app title.
+target_title={{TARGET_TITLE}}
+screenshot ${PROJECT_ROOT}\artifacts\real_app_before.bmp
+click 90 120 human 900
+wait 300
+type dogfood_v015 human 90
+wait 700
+screenshot ${PROJECT_ROOT}\artifacts\real_app_after.bmp

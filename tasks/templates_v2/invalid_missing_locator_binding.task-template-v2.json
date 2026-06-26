@@ -1,0 +1,36 @@
+{
+  "schema_version": "5.4.1",
+  "runtime_version": "5.8.7",
+  "protocol_version": "5.4",
+  "template_id": "invalid_missing_locator_binding",
+  "required_profile": "local_mail_mock",
+  "parameters": [
+    { "name": "recipient", "type": "string", "required": true },
+    { "name": "subject", "type": "string", "required": true },
+    { "name": "body", "type": "string", "required": true },
+    { "name": "file_path", "type": "path", "required": true },
+    { "name": "expected_result", "type": "string", "required": true },
+    { "name": "output_region", "type": "roi", "required": true }
+  ],
+  "states": ["pending", "running", "completed", "failed"],
+  "preconditions": [],
+  "steps": [
+    { "step_id": "missing_locator", "action": "click", "locator_ref": "not_in_profile" }
+  ],
+  "verification": {
+    "type": "profile_bound_text",
+    "expected_parameter": "expected_result",
+    "roi_parameter": "output_region"
+  },
+  "recovery": {
+    "use_profile_recovery_strategy": true,
+    "safe_stop_on_unresolved": true
+  },
+  "confirmation_nodes": [],
+  "final_state_policy": {
+    "success_state": "completed",
+    "failure_state": "failed",
+    "profile_can_override_safety": false
+  },
+  "allow_unrestricted_desktop": false
+}

@@ -1,0 +1,8 @@
+{
+  "recipient": "qa@example.invalid",
+  "subject": "Bad path",
+  "body": "This should fail path validation.",
+  "file_path": "..\\..\\Windows\\System32\\config\\SAM",
+  "expected_result": "Mock send ready",
+  "output_region": "send_button_area"
+}

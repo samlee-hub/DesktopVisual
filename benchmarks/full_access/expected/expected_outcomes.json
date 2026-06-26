@@ -1,0 +1,12 @@
+{
+  "permission_mode_default_denied": "PASS",
+  "full_access_unlock": "PASS_OR_SKIPPED_INTERACTIVE",
+  "global_app_launch": "PASS_OR_SKIPPED",
+  "external_web_navigation": "PASS",
+  "form_semantics_mixed": "PASS",
+  "decision_task_form": "PASS",
+  "checkpoint_loop_guard": "SAFE_STOP",
+  "communication_simulated": "PASS",
+  "coding_workflow_simulated": "PASS",
+  "assessment_permission_notice": "PASS_WITH_PUBLIC_RELEASE_PERMISSION_NOTICE"
+}

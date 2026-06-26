@@ -1,0 +1,10 @@
+{
+  "schema_version": "5.1.5",
+  "sample": "local_problem_mock",
+  "status": "optional_sample",
+  "task_type": "local_mock_problem",
+  "permission_profile": "DEFAULT",
+  "requires_external_web": false,
+  "requires_vlm": false,
+  "notes": "Placeholder sample metadata for future local problem mock tasks. No runner is implemented for this sample in v5.1.5."
+}

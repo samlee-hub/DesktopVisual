@@ -1,0 +1,10 @@
+case_version=2
+# Edge dogfood is executed by run.ps1 because it needs a generated local HTML file,
+# an isolated browser profile, and process cleanup.
+
+target_title="DesktopVisual Dogfood Test"
+observe
+act selector="coord:x=175,y=205" action="click"
+type text="DogfoodEdgeTest"
+press key="ENTER"
+expect text_contains="Received"

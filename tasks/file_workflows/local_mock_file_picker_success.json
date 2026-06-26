@@ -1,0 +1,15 @@
+{
+  "schema_version": "5.5.2",
+  "flow_id": "local_mock_file_picker_success",
+  "parent_window": "DesktopVisual Mail Mock",
+  "picker_window": "Open",
+  "file_path": "artifacts/dev5.5.1/allowed/mock_attachment.txt",
+  "picker_detected": true,
+  "path_input": true,
+  "open_confirmed": true,
+  "picker_closed": true,
+  "target_app_changed": true,
+  "cancelled": false,
+  "timeout": false,
+  "no_real_upload": true
+}

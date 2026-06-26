@@ -1,0 +1,25 @@
+{
+  "name": "copy_text",
+  "description": "Click a selectable text/control target and send CTRL+C through the authorized target window.",
+  "required_permissions": ["target_window", "input_mouse", "input_keyboard", "selector", "clipboard"],
+  "allowed_window": {
+    "title": "${task.target.title}",
+    "process": "${task.target.process}",
+    "requires_unique": true
+  },
+  "expected_result": "The target selection receives CTRL+C. Clipboard contents are not written into the task report.",
+  "failure_behavior": "Stop on window, safety, selector, focus, click, or hotkey failure.",
+  "steps": [
+    {
+      "name": "select_copy_target",
+      "type": "act",
+      "selector": "${selector}",
+      "action": "click"
+    },
+    {
+      "name": "copy_selection",
+      "type": "hotkey",
+      "keys": "CTRL+C"
+    }
+  ]
+}
