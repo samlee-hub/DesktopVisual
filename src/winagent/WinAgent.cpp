@@ -1750,6 +1750,158 @@ bool IsVisibleOrDesktopActionCommand(const std::wstring& command) {
     return std::find(commands.begin(), commands.end(), command) != commands.end();
 }
 
+struct VisibleHelpContract {
+    const wchar_t* command;
+    const wchar_t* requiredHint;
+    const wchar_t* example;
+};
+
+const VisibleHelpContract* FindVisibleHelpContract(const std::wstring& command) {
+    static const VisibleHelpContract contracts[] = {
+        {L"browser-open-url-human", L"--url", L"winagent.exe browser-open-url-human --url https://example.com --expected-marker Example --browser chrome --permission-mode DEVELOPER_CAPABILITY_DISCOVERY"},
+        {L"target-lock-acquire", L"", L""},
+        {L"foreground-preempt", L"", L""},
+        {L"visible-text-input", L"", L""},
+        {L"visible-action-batch", L"--plan and --out", L""},
+        {L"visible-ui-verify", L"", L""},
+        {L"visible-operation-policy-check", L"", L""},
+        {L"visible-app-launch", L"--target, --app, or --url", L""},
+        {L"visible-show-desktop", L"", L""},
+        {L"visible-window-switch", L"--target-title or --target-process (or --title / --target)", L""},
+        {L"taskbar-icon-locate", L"--target", L"winagent.exe taskbar-icon-locate --target Chrome --permission-mode DEVELOPER_CAPABILITY_DISCOVERY"},
+        {L"taskbar-icon-click", L"--target", L"winagent.exe taskbar-icon-click --target Chrome --permission-mode DEVELOPER_CAPABILITY_DISCOVERY"},
+        {L"desktop-icon-locate", L"--target", L""},
+        {L"desktop-icon-double-click", L"--target", L""},
+        {L"start-menu-visible-launch", L"--app or --target", L""},
+        {L"visible-page-navigation", L"", L""},
+        {L"locate", L"--title and --selector, or --title with --profile and --profile-locator", L""},
+        {L"act", L"--title, --selector, and --action (the type action also needs --text)", L"winagent.exe act --title Chrome --selector uia:name=Back --action click --permission-mode DEVELOPER_CAPABILITY_DISCOVERY"},
+        {L"click", L"--title, --x, and --y", L""},
+        {L"double-click", L"--title, --x, and --y", L""},
+        {L"right-click", L"--title, --x, and --y", L""},
+        {L"scroll", L"--title, --x, --y, and --delta", L""},
+        {L"drag", L"--title, --from-x, --from-y, --to-x, and --to-y", L""},
+        {L"press", L"--title and --key", L""},
+        {L"hotkey", L"--title and --keys", L""},
+        {L"type", L"--title and --text", L""},
+        {L"desktop-move", L"--screen-x and --screen-y", L"winagent.exe desktop-move --screen-x 600 --screen-y 400 --permission-mode DEVELOPER_CAPABILITY_DISCOVERY"},
+        {L"desktop-click", L"--screen-x and --screen-y", L"winagent.exe desktop-click --screen-x 900 --screen-y 745 --permission-mode DEVELOPER_CAPABILITY_DISCOVERY"},
+        {L"desktop-double-click", L"--screen-x and --screen-y", L""},
+        {L"desktop-right-click", L"--screen-x and --screen-y", L""},
+        {L"desktop-press", L"--key", L"winagent.exe desktop-press --key enter"},
+        {L"desktop-hotkey", L"--keys", L"winagent.exe desktop-hotkey --keys ctrl+l"},
+        {L"desktop-type", L"--text", L"winagent.exe desktop-type --text hello"},
+        {L"clipboard-paste", L"--title", L""},
+        {L"focus", L"--title", L""},
+        {L"focus-window", L"--title, --hwnd, or --process", L""},
+        {L"activate-window", L"--title, --hwnd, or --process", L""},
+        {L"bring-window-front", L"--title, --hwnd, or --process", L""},
+        {L"minimize-window", L"--title, --hwnd, or --process", L""},
+        {L"restore-window", L"--title, --hwnd, or --process", L""},
+        {L"prepare-foreground", L"--title, --hwnd, or --process", L""},
+        {L"adaptive-click", L"", L""},
+        {L"adaptive-double-click", L"", L""},
+        {L"adaptive-type", L"--text", L""},
+        {L"adaptive-scroll", L"--title or --hwnd", L""},
+        {L"adaptive-run-step", L"--diagnostic", L""},
+        {L"scroll-and-locate", L"--title or --hwnd, and --target-text", L""},
+        {L"uia-click", L"--title and --name", L""},
+        {L"uia-type", L"--title, --name, and --text", L""},
+        {L"click-text", L"--title and --text", L""},
+        {L"click-image", L"--title and --template", L""},
+        {L"wait-text", L"--title and --text", L""},
+        {L"assert-text-contains", L"--title and --text", L""}
+    };
+    for (const VisibleHelpContract& contract : contracts) {
+        if (command == contract.command) {
+            return &contract;
+        }
+    }
+    return nullptr;
+}
+
+const wchar_t* const kVisibleHelpSharedFlags[] = {
+    L"--permission-mode",
+    L"--dry-run",
+    L"--expected-process-pattern",
+    L"--expected-title-pattern",
+    L"--required-marker",
+    L"--wrong-page-pattern",
+    L"--active-protection-pattern",
+    L"--automation-pattern",
+    L"--loading-overlay-pattern",
+    L"--stop-on-wrong-context",
+    L"--require-target-rect",
+    L"--require-target-current",
+    L"--require-target-unique",
+    L"--require-target-inside-viewport",
+    L"--expected-focus-marker",
+    L"--guard-trace-jsonl",
+    L"--guard-result-json",
+    L"--browser-normalize-before-action",
+    L"--browser-normalize-mode"
+};
+
+std::wstring VisibleHelpSharedFlagsJson() {
+    std::wstring json = L"[";
+    bool first = true;
+    for (const wchar_t* flag : kVisibleHelpSharedFlags) {
+        if (!first) {
+            json += L",";
+        }
+        first = false;
+        json += JsonString(flag);
+    }
+    json += L"]";
+    return json;
+}
+
+bool IsVisibleHelpListedFlag(const std::wstring& token) {
+    for (const wchar_t* flag : kVisibleHelpSharedFlags) {
+        if (token == flag) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::wstring VisibleHelpContractJson(const std::wstring& command, int argc, wchar_t** argv) {
+    const VisibleHelpContract* contract = FindVisibleHelpContract(command);
+    std::wstring requiredHint = contract == nullptr ? std::wstring() : std::wstring(contract->requiredHint);
+    std::wstring example = contract == nullptr ? std::wstring() : std::wstring(contract->example);
+    std::wstring json = L"{\"command\":" + JsonString(command);
+    json += L",\"usage\":";
+    json += requiredHint.empty()
+        ? JsonString(L"winagent.exe " + command + L" [options] -- see COMMAND_PROTOCOL.md")
+        : JsonString(L"winagent.exe " + command + L" " + requiredHint + L" [options]");
+    json += L",\"required_hint\":" + JsonString(requiredHint);
+    json += L",\"example\":" + JsonString(example);
+    json += L",\"shared_flags_documented\":" + VisibleHelpSharedFlagsJson();
+    json += L",\"shared_flags_note\":" + JsonString(L"Documented for runtime action commands (COMMAND_PROTOCOL.md v6.1.4-rerun guard set); a given command may accept only a subset.");
+    std::wstring unlisted;
+    for (int i = 2; i < argc; ++i) {
+        std::wstring token = argv[i];
+        if (token.size() < 3 || token[0] != L'-' || token[1] != L'-') {
+            continue;
+        }
+        if (token == L"--help" || IsVisibleHelpListedFlag(token)) {
+            continue;
+        }
+        if (!example.empty() && example.find(token) != std::wstring::npos) {
+            continue;
+        }
+        if (!unlisted.empty()) {
+            unlisted += L",";
+        }
+        unlisted += JsonString(token);
+    }
+    json += L",\"unlisted_flags\":[" + unlisted + L"]";
+    json += L",\"unlisted_flags_note\":" + JsonString(L"Flags on this invocation that are not in the shared guard set or in this command's contract hints; they are not rejected by help discovery and may still be accepted.");
+    json += L",\"contract_source\":" + JsonString(L"command argument-validation messages in src/winagent plus COMMAND_PROTOCOL.md v6.1.4-rerun guard set");
+    json += L",\"execution_impact\":\"none\"}";
+    return json;
+}
+
 bool MaybeHandleNonExecutingVisibleDiscovery(int argc, wchar_t** argv, int& exitCode) {
     if (argc < 2) {
         return false;
@@ -1772,7 +1924,9 @@ bool MaybeHandleNonExecutingVisibleDiscovery(int argc, wchar_t** argv, int& exit
     if (HasSubcommandHelpDiscoveryArg(argc, argv)) {
         std::wstring data = baseData
             + L",\"help_requested\":true"
-            + L",\"discovery_contract\":\"visible_action_help_is_non_executing\"}";
+            + L",\"discovery_contract\":\"visible_action_help_is_non_executing\""
+            + L",\"argument_contract\":" + VisibleHelpContractJson(command, argc, argv)
+            + L"}";
         exitCode = EmitFailure(command, startTick, NoTraceTarget(), L"NON_EXECUTING_HELP", L"Help discovery for visible/action subcommands is non-executing. Use winagent.exe help and COMMAND_PROTOCOL.md for command templates.", data, 0);
         return true;
     }
@@ -3474,6 +3628,26 @@ int CommandFind(int argc, wchar_t** argv) {
     return EmitSuccess(command, startTick, MakeTraceTarget(selected), data.str());
 }
 
+bool ParseRegionArg(int argc, wchar_t** argv, const wchar_t* name, RECT& region, std::wstring& error) {
+    std::wstring value;
+    if (!ArgValue(argc, argv, name, value)) {
+        return true;
+    }
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+    if (swscanf_s(value.c_str(), L"%d,%d,%d,%d", &x, &y, &width, &height) != 4 || width <= 0 || height <= 0) {
+        error = L"--region must be x,y,width,height with positive width and height.";
+        return false;
+    }
+    region.left = x;
+    region.top = y;
+    region.right = x + width;
+    region.bottom = y + height;
+    return true;
+}
+
 int CommandScreenshot(int argc, wchar_t** argv) {
     ULONGLONG startTick = GetTickCount64();
     const std::wstring command = L"screenshot";
@@ -3487,6 +3661,11 @@ int CommandScreenshot(int argc, wchar_t** argv) {
     ArgValue(argc, argv, L"--hwnd", hwndArg);
     ArgValue(argc, argv, L"--process", process);
     ArgValue(argc, argv, L"--format", format);
+    RECT region = {};
+    std::wstring regionError;
+    if (!ParseRegionArg(argc, argv, L"--region", region, regionError)) {
+        return EmitFailure(command, startTick, NoTraceTarget(), L"INVALID_ARGUMENT", regionError, L"{}", 2);
+    }
     std::wstring parseError;
     if (!ParseOptionalBoolArg(argc, argv, L"--include-metadata", includeMetadata, parseError)) {
         return EmitFailure(command, startTick, NoTraceTarget(), L"INVALID_ARGUMENT", parseError, L"{}", 2);
@@ -3495,12 +3674,19 @@ int CommandScreenshot(int argc, wchar_t** argv) {
         return EmitFailure(command, startTick, NoTraceTarget(), L"INVALID_ARGUMENT", L"screenshot requires --out.", WithSuggestedCommand(L"{}", L"screenshot --title <partial_title> --out <file>"), 2);
     }
 
+    const bool hasRegion = region.right > region.left && region.bottom > region.top;
+    if (hasRegion && (!title.empty() || !hwndArg.empty() || !process.empty())) {
+        return EmitFailure(command, startTick, NoTraceTarget(), L"INVALID_ARGUMENT", L"--region captures the virtual desktop only and cannot be combined with --title, --hwnd, or --process.", L"{}", 2);
+    }
+
     if (title.empty() && hwndArg.empty() && process.empty()) {
         ForegroundPreemptResult preempt = prepare_before_first_observation(nullptr, false);
         if (!preempt.ok) {
             return EmitFailure(command, startTick, NoTraceTarget(), preempt.errorCode.empty() ? L"FAIL_FOREGROUND_PREEMPT_NOT_RUN_BEFORE_OBSERVATION" : preempt.errorCode, preempt.errorMessage, L"{\"out\":" + JsonString(outputPath) + L",\"foreground_preempt\":" + ForegroundPreemptJson(preempt) + L"}", 1);
         }
-        GlobalDpiAwareFrameResult global = capture_full_desktop_dpi_aware(outputPath, format, includeMetadata);
+        GlobalDpiAwareFrameResult global = hasRegion
+            ? capture_region_dpi_aware(outputPath, format, region, includeMetadata)
+            : capture_full_desktop_dpi_aware(outputPath, format, includeMetadata);
         std::wstring data = GlobalDpiAwareFrameDataJson(global);
         data = MergeObjectField(data, L"foreground_preempt", ForegroundPreemptJson(preempt));
         data = data.substr(0, data.size() - 1) + L",\"defaulted_to_global_screenshot\":true}";
@@ -3529,7 +3715,7 @@ int CommandScreenshot(int argc, wchar_t** argv) {
         return EmitFailure(command, startTick, MakeTraceTarget(selected), prep.errorCode.empty() ? L"WINDOW_FOCUS_FAILED" : prep.errorCode, prep.errorMessage, failure, 1);
     }
 
-    ScreenshotResult result = CaptureWindowToBmp(selected.hwnd, outputPath);
+    ScreenshotResult result = CaptureWindowToFile(selected.hwnd, outputPath, format);
     if (!result.ok) {
         std::wstring data = L"{\"out\":" + JsonString(outputPath)
             + L",\"capture_scope\":\"window_only\",\"can_be_final_evidence\":false"
@@ -3540,6 +3726,7 @@ int CommandScreenshot(int argc, wchar_t** argv) {
     std::wstringstream fields;
     fields << L"{\"out\":" << JsonString(outputPath)
            << L",\"method\":" << JsonString(result.method)
+           << L",\"format\":" << JsonString(result.format)
            << L",\"capture_scope\":\"window_only\""
            << L",\"can_be_final_evidence\":false"
            << L",\"failure_code_if_used_as_final_evidence\":\"FAIL_WINDOW_SCREENSHOT_USED_AS_FINAL_EVIDENCE\""

@@ -326,14 +326,29 @@ SelectorResult SuccessUiaElement(
 }
 
 SelectorResult LocateCoord(HWND hwnd, const std::wstring& selector, const SelectorSpec& spec) {
-    int x = 0;
-    int y = 0;
-    if (!ParseInt(ValueFor(spec, L"x"), x) || !ParseInt(ValueFor(spec, L"y"), y) || x < 0 || y < 0) {
-        return Error(selector, L"coord", L"INVALID_SELECTOR", L"coord selector requires non-negative x and y.");
-    }
     RECT client = {};
     if (!GetClientRect(hwnd, &client)) {
         return Error(selector, L"coord", L"UNKNOWN_ERROR", L"GetClientRect failed.");
+    }
+    int x = 0;
+    int y = 0;
+    if (HasKey(spec, L"screen_x") || HasKey(spec, L"screen_y")) {
+        int screenX = 0;
+        int screenY = 0;
+        if (!ParseInt(ValueFor(spec, L"screen_x"), screenX) || !ParseInt(ValueFor(spec, L"screen_y"), screenY)) {
+            return Error(selector, L"coord", L"INVALID_SELECTOR", L"coord selector requires integer screen_x and screen_y.");
+        }
+        if (!ScreenToClientPoint(hwnd, screenX, screenY, x, y)) {
+            return Error(selector, L"coord", L"LOCATOR_NOT_FOUND", L"coord selector screen point is outside the target window.");
+        }
+        if (x < 0 || y < 0 || x >= client.right || y >= client.bottom) {
+            return Error(selector, L"coord", L"LOCATOR_NOT_FOUND", L"coord selector screen point is outside the target client area.");
+        }
+        RECT screenRect = {x, y, x, y};
+        return SuccessPoint(selector, L"coord", 1, hwnd, x, y, screenRect);
+    }
+    if (!ParseInt(ValueFor(spec, L"x"), x) || !ParseInt(ValueFor(spec, L"y"), y) || x < 0 || y < 0) {
+        return Error(selector, L"coord", L"INVALID_SELECTOR", L"coord selector requires non-negative x and y, or screen_x and screen_y.");
     }
     if (x >= client.right || y >= client.bottom) {
         return Error(selector, L"coord", L"LOCATOR_NOT_FOUND", L"coord selector point is outside the target client area.");

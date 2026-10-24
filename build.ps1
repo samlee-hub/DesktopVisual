@@ -271,6 +271,7 @@ $testWindowRootForCpp = $TestWindowRoot.Replace('\', '\\')
 $winAgentResponseFile = Join-Path $buildWorkDir 'winagent_cl.rsp'
 $compileWinAgentArgs = @(
     '/nologo',
+    '/MP',
     '/utf-8',
     '/std:c++17',
     '/EHsc',

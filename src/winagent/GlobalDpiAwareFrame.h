@@ -34,6 +34,10 @@ struct GlobalDpiAwareFrameResult {
     bool frameInvalidatedByWindowChange = false;
     bool frameReusedForPlanning = false;
     bool newGlobalFrameForFinalVerification = false;
+    bool regionCapture = false;
+    RECT captureRegion = {};
+    int imageWidth = 0;
+    int imageHeight = 0;
 };
 
 struct GlobalFrameCache {
@@ -48,6 +52,8 @@ struct GlobalFrameCache {
 bool set_process_dpi_awareness_per_monitor_v2(std::wstring& dpiAwareness, std::wstring& error);
 GlobalDpiAwareFrameResult capture_virtual_desktop(const std::wstring& outPath, const std::wstring& format);
 GlobalDpiAwareFrameResult capture_full_desktop_dpi_aware(const std::wstring& outPath, const std::wstring& format, bool includeMetadata);
+GlobalDpiAwareFrameResult capture_region_dpi_aware(const std::wstring& outPath, const std::wstring& format, const RECT& region, bool includeMetadata);
+std::wstring ResolveImageFormat(std::wstring format, const std::wstring& outPath);
 GlobalDpiAwareFrameResult capture_full_desktop_dpi_aware_cached(
     GlobalFrameCache& cache,
     const std::wstring& outPath,

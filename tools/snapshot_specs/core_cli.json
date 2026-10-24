@@ -1,0 +1,111 @@
+{
+  "name": "core_cli",
+  "description": "Deterministic CLI contract snapshots for bin\\winagent.exe. Volatile session data is dropped; per-entry keep lists project the contract fields only.",
+  "drop": [
+    "timestamp",
+    "duration_ms",
+    "build_time"
+  ],
+  "entries": [
+    {
+      "name": "version",
+      "args": [
+        "version"
+      ]
+    },
+    {
+      "name": "permission_status",
+      "args": [
+        "permission-status"
+      ]
+    },
+    {
+      "name": "policy_check_desktop_click",
+      "args": [
+        "policy-check",
+        "--title",
+        "DesktopVisual",
+        "--process",
+        "winagent.exe",
+        "--action",
+        "desktop-click"
+      ]
+    },
+    {
+      "name": "screenshot_region_png",
+      "args": [
+        "screenshot",
+        "--region",
+        "302,100,1918,400"
+      ],
+      "out_ext": "png",
+      "keep": [
+        "format",
+        "image_width",
+        "image_height",
+        "region_capture",
+        "capture_region",
+        "capture_scope",
+        "dpi_awareness",
+        "physical_width",
+        "physical_height",
+        "virtual_screen_rect"
+      ],
+      "expect": {
+        "format": "png",
+        "image_width": 1918,
+        "image_height": 400,
+        "region_capture": true
+      }
+    },
+    {
+      "name": "visible_help_contract_desktop_move",
+      "args": [
+        "desktop-move",
+        "--help"
+      ],
+      "allow_not_ok": true,
+      "keep": [
+        "non_executing",
+        "runtime_action_executed",
+        "desktop_action_executed",
+        "mouse_moved",
+        "mouse_clicked",
+        "keyboard_input_sent",
+        "window_switched",
+        "app_opened",
+        "desktop_shown",
+        "help_requested",
+        "discovery_contract",
+        "argument_contract"
+      ],
+      "expect": {
+        "non_executing": true,
+        "runtime_action_executed": false,
+        "mouse_moved": false,
+        "help_requested": true,
+        "discovery_contract": "visible_action_help_is_non_executing"
+      }
+    },
+    {
+      "name": "screenshot_full_png",
+      "args": [
+        "screenshot"
+      ],
+      "out_ext": "png",
+      "keep": [
+        "format",
+        "region_capture",
+        "capture_scope",
+        "dpi_awareness",
+        "physical_width",
+        "physical_height",
+        "virtual_screen_rect"
+      ],
+      "expect": {
+        "format": "png",
+        "region_capture": false
+      }
+    }
+  ]
+}

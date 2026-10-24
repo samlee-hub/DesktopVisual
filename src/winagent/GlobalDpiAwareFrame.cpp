@@ -382,6 +382,116 @@ GlobalDpiAwareFrameResult capture_full_desktop_dpi_aware(const std::wstring& out
     return result;
 }
 
+std::wstring ResolveImageFormat(std::wstring format, const std::wstring& outPath) {
+    return NormalizeFormat(format, outPath);
+}
+
+GlobalDpiAwareFrameResult capture_region_dpi_aware(const std::wstring& outPath, const std::wstring& format, const RECT& region, bool includeMetadata) {
+    ULONGLONG start = GetTickCount64();
+    GlobalDpiAwareFrameResult result;
+    result.outPath = outPath;
+    result.format = NormalizeFormat(format, outPath);
+    std::wstring dpi;
+    std::wstring dpiError;
+    if (!set_process_dpi_awareness_per_monitor_v2(dpi, dpiError)) {
+        result.errorCode = L"FAIL_GLOBAL_SCREENSHOT_DPI_AWARENESS";
+        result.errorMessage = dpiError;
+        result.dpiAwareness = dpi;
+        result.durationMs = Elapsed(start);
+        return result;
+    }
+    result.dpiAwareness = dpi;
+    result.virtualScreenRect = VirtualScreenRect();
+    result.physicalWidth = result.virtualScreenRect.right - result.virtualScreenRect.left;
+    result.physicalHeight = result.virtualScreenRect.bottom - result.virtualScreenRect.top;
+    result.canBeFinalEvidence = true;
+    result.regionCapture = true;
+    result.captureRegion = region;
+    result.cursorPosition = capture_cursor_position();
+    result.foreground = capture_foreground_window_metadata();
+
+    int width = region.right - region.left;
+    int height = region.bottom - region.top;
+    if (width <= 0 || height <= 0) {
+        result.errorCode = L"INVALID_REGION";
+        result.errorMessage = L"Capture region is empty.";
+        result.durationMs = Elapsed(start);
+        return result;
+    }
+    if (region.left < 0 || region.top < 0 || region.right > result.physicalWidth || region.bottom > result.physicalHeight) {
+        result.errorCode = L"INVALID_REGION";
+        result.errorMessage = L"Capture region is outside the virtual screen.";
+        result.durationMs = Elapsed(start);
+        return result;
+    }
+    result.imageWidth = width;
+    result.imageHeight = height;
+
+    HDC screenDc = GetDC(nullptr);
+    if (!screenDc) {
+        result.errorCode = L"FAIL_GLOBAL_SCREENSHOT_INCOMPLETE";
+        result.errorMessage = L"GetDC failed.";
+        result.durationMs = Elapsed(start);
+        return result;
+    }
+    HDC memoryDc = CreateCompatibleDC(screenDc);
+    HBITMAP bitmap = CreateCompatibleBitmap(screenDc, width, height);
+    if (!memoryDc || !bitmap) {
+        if (bitmap) DeleteObject(bitmap);
+        if (memoryDc) DeleteDC(memoryDc);
+        ReleaseDC(nullptr, screenDc);
+        result.errorCode = L"FAIL_GLOBAL_SCREENSHOT_INCOMPLETE";
+        result.errorMessage = L"Could not allocate region capture bitmap.";
+        result.durationMs = Elapsed(start);
+        return result;
+    }
+    HGDIOBJ old = SelectObject(memoryDc, bitmap);
+    BOOL copied = BitBlt(
+        memoryDc,
+        0,
+        0,
+        width,
+        height,
+        screenDc,
+        result.virtualScreenRect.left + region.left,
+        result.virtualScreenRect.top + region.top,
+        SRCCOPY | CAPTUREBLT);
+    SelectObject(memoryDc, old);
+    std::wstring saveError;
+    if (!copied) {
+        result.errorCode = L"FAIL_GLOBAL_SCREENSHOT_INCOMPLETE";
+        result.errorMessage = L"BitBlt failed for capture region.";
+        DeleteObject(bitmap);
+        DeleteDC(memoryDc);
+        ReleaseDC(nullptr, screenDc);
+        result.durationMs = Elapsed(start);
+        return result;
+    }
+    if (result.format == L"png") {
+        result.ok = write_png(bitmap, outPath, saveError);
+    } else {
+        result.ok = write_bmp(bitmap, outPath, saveError);
+    }
+    if (!result.ok && result.errorCode.empty()) {
+        result.errorCode = L"FAIL_GLOBAL_SCREENSHOT_INCOMPLETE";
+        result.errorMessage = saveError.empty() ? L"Could not write region screenshot." : saveError;
+    }
+    DeleteObject(bitmap);
+    DeleteDC(memoryDc);
+    ReleaseDC(nullptr, screenDc);
+    if (result.ok && includeMetadata) {
+        result.metadataPath = outPath + L".metadata.json";
+        std::wstring metaError;
+        if (!write_frame_metadata_json(result, result.metadataPath, metaError)) {
+            result.ok = false;
+            result.errorCode = L"FAIL_GLOBAL_SCREENSHOT_INCOMPLETE";
+            result.errorMessage = metaError;
+        }
+    }
+    result.durationMs = Elapsed(start);
+    return result;
+}
+
 bool verify_frame_covers_virtual_screen(const GlobalDpiAwareFrameResult& result) {
     RECT expected = VirtualScreenRect();
     return result.physicalWidth == (expected.right - expected.left) &&
@@ -461,6 +571,10 @@ std::wstring GlobalDpiAwareFrameDataJson(const GlobalDpiAwareFrameResult& result
          << L",\"virtual_screen_rect\":" << RectJson(result.virtualScreenRect)
          << L",\"physical_width\":" << result.physicalWidth
          << L",\"physical_height\":" << result.physicalHeight
+         << L",\"region_capture\":" << BoolJson(result.regionCapture)
+         << L",\"capture_region\":" << RectJson(result.captureRegion)
+         << L",\"image_width\":" << (result.imageWidth > 0 ? result.imageWidth : result.physicalWidth)
+         << L",\"image_height\":" << (result.imageHeight > 0 ? result.imageHeight : result.physicalHeight)
          << L",\"dpi_awareness\":" << simplejson::Quote(result.dpiAwareness)
          << L",\"foreground_window\":{\"hwnd\":" << HwndJson(result.foreground.hwnd)
          << L",\"pid\":" << result.foreground.pid

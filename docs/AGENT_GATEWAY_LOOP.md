@@ -106,18 +106,31 @@ Fields that carry the diagnosis:
 
 ## 6. Contract traps measured on this build
 
-- `coord:x=..,y=..` selectors are CLIENT-relative to the target window. Screen
-  pixels passed in produce `LOCATOR_NOT_FOUND: coord selector point is outside
-  the target client area.` The `desktop-*` commands, by contrast, take screen
-  coordinates, and on a 150% display they take LOGICAL screen coordinates while
-  the global screenshot is PHYSICAL.
+- `coord:x=..,y=..` selectors are CLIENT-relative to the target window. Absolute
+  screen points go in as `coord:screen_x=..,screen_y=..`; mixing the two up
+  produces `LOCATOR_NOT_FOUND: coord selector point is outside the target client
+  area.` The `desktop-*` commands take screen coordinates too, and on a 150%
+  display those are LOGICAL while the global screenshot is PHYSICAL.
+- `screenshot --region x,y,w,h` crops the global frame in PHYSICAL pixels and
+  writes only the crop (`region_capture=true`, `image_width`/`image_height`).
+  It cannot be combined with `--title`/`--hwnd`/`--process`.
+- `screenshot` honours `--format` and the `--out` extension on the window path
+  as well: naming the file `.png` now yields PNG bytes, not BMP.
 - `expect.text_contains` resolves through window text/OCR. On UWP/XAML apps the
   window capture can be stale or partial, so the assertion fails while the UI is
   already correct. Prefer `expect.selector_exists` with a UIA locator, e.g.
   `uia:name_contains=显示为 42`.
 - `observe` step screenshots are window-only (`PrintWindow`). When a decision
-  needs the real pixels, capture a global frame and crop it by the window rect
-  scaled by the display DPI ratio.
+  needs the real pixels, take `screenshot --region` over the window area in
+  physical pixels (window rect x the display scale) instead of cropping a full
+  frame afterwards.
+- `<visible command> --help` stays non-executing (every `runtime_action_executed` /
+  `mouse_moved` / `keyboard_input_sent` flag is false) but now returns
+  `data.argument_contract`: `required_hint` (the command's own validation text,
+  e.g. `--screen-x and --screen-y`), `example`, the documented shared guard flags,
+  and `unlisted_flags` for `--flags` on that invocation that the contract does not
+  mention. Read it instead of guessing flags; the response is still
+  `ok:false` / `NON_EXECUTING_HELP` with exit code 0.
 - `run-task` on a TaskSession file is not the same engine: the minimal runner
   only accepts `local_form_fill_submit_mock` and returns
   `UNSUPPORTED_TASK_TYPE` for anything else. Use version 1 task files.
@@ -129,3 +142,8 @@ Fields that carry the diagnosis:
 - Same task with screen-pixel coords: LOCATOR_NOT_FOUND at step 2 in 188 ms.
 - Interactive WeChat task driven one command per model turn: 34 round trips,
   174 s wall clock, 2.95M input tokens, 4.33 s of actual UI execution.
+- Huya homepage to search results with a screen-coordinate task: one run-task
+  call, 6328 ms, 4/4 steps, 0 recoveries, 0 deferred expects. Two model round
+  trips in total - one `screenshot --region` (1918x400 PNG, 68 KB) plus the
+  task. The same segment driven by hand took four round trips and about two
+  minutes.

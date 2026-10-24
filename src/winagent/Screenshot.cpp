@@ -1,5 +1,7 @@
 #include "Screenshot.h"
 
+#include "GlobalDpiAwareFrame.h"
+
 #include <cstdio>
 #include <vector>
 
@@ -65,6 +67,10 @@ bool SaveBitmapToFile(HBITMAP bitmap, const std::wstring& outputPath, std::wstri
 }  // namespace
 
 ScreenshotResult CaptureWindowToBmp(HWND hwnd, const std::wstring& outputPath) {
+    return CaptureWindowToFile(hwnd, outputPath, L"bmp");
+}
+
+ScreenshotResult CaptureWindowToFile(HWND hwnd, const std::wstring& outputPath, const std::wstring& format) {
     ScreenshotResult result;
 
     RECT rect = {};
@@ -118,8 +124,15 @@ ScreenshotResult CaptureWindowToBmp(HWND hwnd, const std::wstring& outputPath) {
     }
 
     std::wstring saveError;
-    result.ok = SaveBitmapToFile(bitmap, outputPath, saveError);
+    std::wstring resolvedFormat = ResolveImageFormat(format, outputPath);
+    if (resolvedFormat == L"png") {
+        result.ok = write_png(bitmap, outputPath, saveError);
+    } else {
+        result.ok = SaveBitmapToFile(bitmap, outputPath, saveError);
+        resolvedFormat = L"bmp";
+    }
     result.method = method;
+    result.format = resolvedFormat;
     result.error = saveError;
 
     SelectObject(memoryDc, oldBitmap);
