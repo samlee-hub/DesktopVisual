@@ -4,6 +4,7 @@
 #include "BrowserWorkflow.h"
 #include "BrowserWorkflowAdapter.h"
 #include "CompiledPlanExecutor.h"
+#include "CoreWaitState.h"
 #include "ExecutionEvidencePack.h"
 #include "InputController.h"
 #include "ProjectRoot.h"
@@ -132,29 +133,88 @@ bool TitleUnsafeForReuse(const std::wstring& title) {
            ContainsInsensitive(title, L"verification code");
 }
 
-bool ActivateExistingBrowserWindow(const std::wstring& browser, WindowInfo& selected) {
+CoreWaitStateOptions BrowserWorkflowWaitOptions(
+    const std::wstring& waitSite,
+    const std::wstring& waitReason,
+    int waitBudgetMs,
+    int waitReplacedFromSleepMs,
+    const std::wstring& waitStatePredicate) {
+    CoreWaitStateOptions options;
+    options.waitSite = waitSite;
+    options.waitReason = waitReason;
+    options.waitBudgetMs = waitBudgetMs;
+    options.waitPollIntervalMs = 50;
+    options.waitReplacedFromSleepMs = waitReplacedFromSleepMs;
+    options.waitStatePredicate = waitStatePredicate;
+    return options;
+}
+
+bool ForegroundMatchesBrowser(const std::wstring& browser, WindowInfo* selected = nullptr) {
+    WindowInfo active;
+    if (!ActiveWindowInfo(active)) return false;
+    if (!ProcessMatchesBrowser(ProcessNameForPid(active.pid), browser)) return false;
+    if (selected) *selected = active;
+    return true;
+}
+
+bool TryActivateExistingBrowserWindow(const std::wstring& browser, WindowInfo& selected) {
     for (const auto& window : EnumerateVisibleTopLevelWindows()) {
         if (TitleUnsafeForReuse(window.title)) continue;
         if (ProcessMatchesBrowser(ProcessNameForPid(window.pid), browser)) {
             selected = window;
             SetForegroundWindow(window.hwnd);
-            Sleep(200);
             return true;
         }
     }
     return false;
 }
 
-bool WaitForBrowserWindow(const std::wstring& browser, int waitMs, WindowInfo& selected) {
-    ULONGLONG deadline = GetTickCount64() + static_cast<ULONGLONG>(waitMs);
-    do {
-        if (ActivateExistingBrowserWindow(browser, selected)) return true;
-        Sleep(150);
-    } while (GetTickCount64() < deadline);
-    return ActivateExistingBrowserWindow(browser, selected);
+bool ActivateExistingBrowserWindow(
+    const std::wstring& browser,
+    WindowInfo& selected,
+    std::vector<CoreWaitStateResult>* workflowWaits = nullptr) {
+    if (!TryActivateExistingBrowserWindow(browser, selected)) return false;
+    CoreWaitStateResult wait = WaitForWorkflowState(
+        L"BrowserWorkflowExecutor",
+        L"browser",
+        BrowserWorkflowWaitOptions(
+            L"BrowserWorkflowExecutor.ActivateExistingBrowserWindow.foreground_ready",
+            L"browser_existing_window_foreground_ready",
+            200,
+            200,
+            L"WaitUntilBrowserFrameStable"),
+        [&]() { return ForegroundMatchesBrowser(browser, &selected); });
+    if (workflowWaits) workflowWaits->push_back(wait);
+    return true;
 }
 
-bool EnsureBrowserForeground(const std::wstring& browser, WindowInfo& selected) {
+bool WaitForBrowserWindow(
+    const std::wstring& browser,
+    int waitMs,
+    WindowInfo& selected,
+    std::vector<CoreWaitStateResult>* workflowWaits = nullptr) {
+    CoreWaitStateResult wait = WaitForWorkflowState(
+        L"BrowserWorkflowExecutor",
+        L"browser",
+        BrowserWorkflowWaitOptions(
+            L"BrowserWorkflowExecutor.WaitForBrowserWindow.window_ready",
+            L"browser_window_ready_after_launch",
+            waitMs,
+            waitMs,
+            L"WaitUntilBrowserFrameStable"),
+        [&]() {
+            return TryActivateExistingBrowserWindow(browser, selected) &&
+                ForegroundMatchesBrowser(browser, &selected);
+        });
+    if (workflowWaits) workflowWaits->push_back(wait);
+    if (wait.stateReady) return true;
+    return TryActivateExistingBrowserWindow(browser, selected);
+}
+
+bool EnsureBrowserForeground(
+    const std::wstring& browser,
+    WindowInfo& selected,
+    std::vector<CoreWaitStateResult>* workflowWaits = nullptr) {
     WindowInfo active;
     ActiveWindowInfo(active);
     if (active.hwnd && ProcessMatchesBrowser(ProcessNameForPid(active.pid), browser)) {
@@ -166,14 +226,24 @@ bool EnsureBrowserForeground(const std::wstring& browser, WindowInfo& selected) 
         ShowWindow(selected.hwnd, SW_RESTORE);
         BringWindowToTop(selected.hwnd);
         SetForegroundWindow(selected.hwnd);
-        Sleep(180);
+        CoreWaitStateResult wait = WaitForWorkflowState(
+            L"BrowserWorkflowExecutor",
+            L"browser",
+            BrowserWorkflowWaitOptions(
+                L"BrowserWorkflowExecutor.EnsureBrowserForeground.foreground_ready",
+                L"browser_foreground_ready",
+                180,
+                180,
+                L"WaitUntilBrowserFrameStable"),
+            [&]() { return ForegroundMatchesBrowser(browser, &selected); });
+        if (workflowWaits) workflowWaits->push_back(wait);
         ActiveWindowInfo(active);
         if (active.hwnd && ProcessMatchesBrowser(ProcessNameForPid(active.pid), browser)) {
             selected = active;
             return true;
         }
     }
-    return ActivateExistingBrowserWindow(browser, selected);
+    return ActivateExistingBrowserWindow(browser, selected, workflowWaits);
 }
 
 std::wstring BrowserHaystack(HWND hwnd, const std::wstring& title, const std::wstring& process) {
@@ -273,11 +343,49 @@ struct BrowserStepOutcome {
     std::wstring normalizerJson = L"{}";
     std::wstring lastHaystack;
     WindowInfo window;
+    std::vector<CoreWaitStateResult> workflowWaits;
+    WorkflowWaitStateSummary workflowWaitSummary;
 };
+
+void AddBrowserWorkflowWait(BrowserStepOutcome& outcome, const CoreWaitStateResult& wait) {
+    outcome.workflowWaits.push_back(wait);
+}
+
+CoreWaitStateResult WaitForBrowserWorkflowState(
+    BrowserStepOutcome& outcome,
+    const std::wstring& waitSite,
+    const std::wstring& waitReason,
+    int waitBudgetMs,
+    int waitReplacedFromSleepMs,
+    const std::wstring& waitStatePredicate,
+    const std::function<bool()>& stateReady) {
+    CoreWaitStateResult wait = WaitForWorkflowState(
+        L"BrowserWorkflowExecutor",
+        L"browser",
+        BrowserWorkflowWaitOptions(waitSite, waitReason, waitBudgetMs, waitReplacedFromSleepMs, waitStatePredicate),
+        stateReady);
+    AddBrowserWorkflowWait(outcome, wait);
+    return wait;
+}
+
+void RecordBrowserWorkflowWaitNotReplaced(
+    BrowserStepOutcome& outcome,
+    const std::wstring& waitSite,
+    const std::wstring& waitReason,
+    int fixedSleepMs,
+    const std::wstring& waitNotReplacedReason) {
+    AddBrowserWorkflowWait(outcome, RecordWorkflowWaitNotReplaced(
+        L"BrowserWorkflowExecutor",
+        L"browser",
+        waitSite,
+        waitReason,
+        fixedSleepMs,
+        waitNotReplacedReason));
+}
 
 bool OpenBrowserHuman(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outcome, int waitMs = 10000) {
     WindowInfo browserWindow;
-    bool reused = ActivateExistingBrowserWindow(spec.browser, browserWindow);
+    bool reused = ActivateExistingBrowserWindow(spec.browser, browserWindow, &outcome.workflowWaits);
     if (!reused) {
         ActionResult runDialog = SendHotkeyGlobal(L"WIN+R");
         if (!runDialog.ok) {
@@ -285,6 +393,12 @@ bool OpenBrowserHuman(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outco
             outcome.errorMessage = runDialog.error;
             return false;
         }
+        RecordBrowserWorkflowWaitNotReplaced(
+            outcome,
+            L"BrowserWorkflowExecutor.OpenBrowserHuman.run_dialog_ready",
+            L"windows_run_dialog_ready_for_browser_launch",
+            250,
+            L"Run dialog input readiness is not exposed as a reliable generic state signal");
         Sleep(250);
         TypeResult typedBrowser = TypeTextGlobal(BrowserExeForOption(spec.browser), L"human", -1);
         if (!typedBrowser.ok) {
@@ -298,26 +412,52 @@ bool OpenBrowserHuman(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outco
             outcome.errorMessage = enterBrowser.error;
             return false;
         }
-        if (!WaitForBrowserWindow(spec.browser, waitMs, browserWindow)) {
+        if (!WaitForBrowserWindow(spec.browser, waitMs, browserWindow, &outcome.workflowWaits)) {
             outcome.stopCode = L"WINDOW_NOT_FOUND";
             outcome.errorMessage = L"Browser window did not appear after human launch.";
             return false;
         }
     }
     SetForegroundWindow(browserWindow.hwnd);
-    Sleep(150);
+    WaitForBrowserWorkflowState(
+        outcome,
+        L"BrowserWorkflowExecutor.OpenBrowserHuman.foreground_after_launch",
+        L"browser_foreground_ready_after_launch",
+        150,
+        150,
+        L"WaitUntilBrowserFrameStable",
+        [&]() { return ForegroundMatchesBrowser(spec.browser, &browserWindow); });
     bool focusAddressOk = false;
     bool typedUrlOk = false;
     bool enterOk = false;
     for (int attempt = 0; attempt < 3; ++attempt) {
         SetForegroundWindow(browserWindow.hwnd);
-        Sleep(120);
+        WaitForBrowserWorkflowState(
+            outcome,
+            L"BrowserWorkflowExecutor.OpenBrowserHuman.address_bar_attempt_foreground",
+            L"browser_foreground_ready_for_address_bar",
+            120,
+            120,
+            L"WaitUntilBrowserFrameStable",
+            [&]() { return ForegroundMatchesBrowser(spec.browser, &browserWindow); });
         ActionResult focusAddress = SendHotkeyGlobal(L"CTRL+L");
         focusAddressOk = focusAddressOk || focusAddress.ok;
         if (!focusAddress.ok) continue;
+        RecordBrowserWorkflowWaitNotReplaced(
+            outcome,
+            L"BrowserWorkflowExecutor.OpenBrowserHuman.address_bar_focus_settle",
+            L"browser_address_bar_focus_settle",
+            80,
+            L"address bar focus/selection state is not reliably visible across Chrome and Edge");
         Sleep(80);
         ActionResult selectAll = SendHotkeyGlobal(L"CTRL+A");
         if (!selectAll.ok) continue;
+        RecordBrowserWorkflowWaitNotReplaced(
+            outcome,
+            L"BrowserWorkflowExecutor.OpenBrowserHuman.address_bar_selection_settle",
+            L"browser_address_bar_selection_settle",
+            80,
+            L"address bar selected text state is not reliably exposed across Chrome and Edge");
         Sleep(80);
         TypeResult typed = TypeTextGlobal(spec.url, L"human", -1);
         typedUrlOk = typed.ok;
@@ -326,6 +466,12 @@ bool OpenBrowserHuman(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outco
             typedUrlOk = paste.ok;
         }
         if (!typedUrlOk) continue;
+        RecordBrowserWorkflowWaitNotReplaced(
+            outcome,
+            L"BrowserWorkflowExecutor.OpenBrowserHuman.address_bar_text_commit_settle",
+            L"browser_address_bar_text_commit_settle",
+            80,
+            L"address bar typed text commit has no reliable generic UIA state signal");
         Sleep(80);
         ActionResult enter = PressKeyGlobal(L"ENTER");
         enterOk = enter.ok;
@@ -344,11 +490,16 @@ bool OpenBrowserHuman(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outco
 
 void ObserveBrowserPage(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outcome, int waitMs = 10000) {
     ExpectedContextSpec guardSpec = ExpectedContextFromBrowserSpec(spec);
-    ULONGLONG deadline = GetTickCount64() + static_cast<ULONGLONG>(waitMs);
     std::wstring matched;
-    do {
-        Sleep(250);
-        if (!EnsureBrowserForeground(spec.browser, outcome.window)) continue;
+    WaitForBrowserWorkflowState(
+        outcome,
+        L"BrowserWorkflowExecutor.ObserveBrowserPage.page_ready",
+        L"browser_page_navigation_or_text_ready",
+        waitMs,
+        waitMs,
+        L"WaitUntilTextAppearsOrBrowserFrameStable",
+        [&]() {
+        if (!EnsureBrowserForeground(spec.browser, outcome.window, &outcome.workflowWaits)) return false;
         BrowserSurfaceNormalizeOptions normalizeOptions;
         normalizeOptions.mode = L"conservative";
         BrowserSurfaceNormalizeResult normalize = NormalizeBrowserSurface(normalizeOptions);
@@ -359,37 +510,37 @@ void ObserveBrowserPage(const BrowserWorkflowSpec& spec, BrowserStepOutcome& out
             outcome.activeProtectionDetected = normalize.activeProtectionDetected;
             outcome.stopCode = normalize.stopCode;
             outcome.errorMessage = normalize.reason;
-            break;
+            return true;
         }
-        if (!EnsureBrowserForeground(spec.browser, outcome.window)) continue;
+        if (!EnsureBrowserForeground(spec.browser, outcome.window, &outcome.workflowWaits)) return false;
         outcome.lastHaystack = BrowserHaystack(outcome.window.hwnd, outcome.window.title, ProcessNameForPid(outcome.window.pid));
         if (AnyPatternMatches(outcome.lastHaystack, spec.credentialRequiredPatterns, matched)) {
             outcome.credentialRequiredDetected = true;
             outcome.stopCode = L"STOP_CREDENTIAL_REQUIRED";
             outcome.errorMessage = L"Credential required marker matched: " + matched;
-            break;
+            return true;
         }
         if (AnyPatternMatches(outcome.lastHaystack, spec.activeProtectionPatterns, matched)) {
             outcome.activeProtectionDetected = true;
             outcome.stopCode = L"STOP_ACTIVE_PROTECTION_OR_LOGIN_BLOCK";
             outcome.errorMessage = L"Active protection marker matched: " + matched;
-            break;
+            return true;
         }
         if (AnyPatternMatches(outcome.lastHaystack, spec.wrongPagePatterns, matched)) {
             outcome.wrongPageDetected = true;
             outcome.stopCode = L"STOP_WRONG_CONTEXT";
             outcome.errorMessage = L"Wrong page marker matched: " + matched;
-            break;
+            return true;
         }
         std::wstring missing;
         outcome.requiredMarkersVerified = AllMarkersPresent(outcome.lastHaystack, spec.requiredMarkers, missing);
         outcome.expectedTitleVerified = spec.expectedTitlePattern.empty() || MatchesPattern(outcome.window.title, spec.expectedTitlePattern) || MatchesPattern(outcome.lastHaystack, spec.expectedTitlePattern);
         outcome.expectedUrlVerified = spec.expectedUrlPattern.empty() || MatchesPattern(spec.url, spec.expectedUrlPattern) || MatchesPattern(outcome.lastHaystack, spec.expectedUrlPattern);
         outcome.pageLoaded = outcome.requiredMarkersVerified || outcome.expectedTitleVerified;
-        if (outcome.pageLoaded && outcome.expectedUrlVerified) break;
-    } while (GetTickCount64() < deadline);
+        return outcome.pageLoaded && outcome.expectedUrlVerified;
+        });
 
-    EnsureBrowserForeground(spec.browser, outcome.window);
+    EnsureBrowserForeground(spec.browser, outcome.window, &outcome.workflowWaits);
     RuntimeTargetContext targetContext;
     RuntimeContextGuardResult guard = EvaluateRuntimeContextGuard(guardSpec, targetContext);
     outcome.runtimeContextGuardUsed = true;
@@ -405,14 +556,25 @@ void ObserveBrowserPage(const BrowserWorkflowSpec& spec, BrowserStepOutcome& out
 
 bool ScrollPageForField(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outcome) {
     if (!outcome.window.hwnd) return false;
-    if (!EnsureBrowserForeground(spec.browser, outcome.window)) return false;
+    if (!EnsureBrowserForeground(spec.browser, outcome.window, &outcome.workflowWaits)) return false;
+    std::wstring beforeHaystack = BrowserHaystack(outcome.window.hwnd, outcome.window.title, ProcessNameForPid(outcome.window.pid));
     RECT rect = outcome.window.rect;
     int x = (rect.right - rect.left) / 2;
     int y = (rect.bottom - rect.top) / 2;
     ClickResult scrolled = ScrollClientPoint(outcome.window.hwnd, x, y, -520, L"human");
     outcome.scrollUsed = outcome.scrollUsed || scrolled.ok;
     outcome.scrollProgressDetected = outcome.scrollProgressDetected || scrolled.ok;
-    Sleep(250);
+    WaitForBrowserWorkflowState(
+        outcome,
+        L"BrowserWorkflowExecutor.ScrollPageForField.frame_stable_after_scroll",
+        L"browser_frame_stable_after_scroll",
+        250,
+        250,
+        L"WaitUntilBrowserFrameStable",
+        [&]() {
+            outcome.lastHaystack = BrowserHaystack(outcome.window.hwnd, outcome.window.title, ProcessNameForPid(outcome.window.pid));
+            return !outcome.lastHaystack.empty() && outcome.lastHaystack != beforeHaystack;
+        });
     ObserveBrowserPage(spec, outcome, 1000);
     return scrolled.ok;
 }
@@ -434,7 +596,7 @@ bool VerifyFieldValue(HWND hwnd, const BrowserWorkflowFieldSpec& field) {
 void ExecuteFormFields(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outcome) {
     outcome.formFieldsTotal = static_cast<int>(spec.formSpec.fields.size());
     for (const auto& field : spec.formSpec.fields) {
-        if (!EnsureBrowserForeground(spec.browser, outcome.window)) {
+        if (!EnsureBrowserForeground(spec.browser, outcome.window, &outcome.workflowWaits)) {
             outcome.stopCode = L"STOP_FOREGROUND_CHANGED";
             outcome.errorMessage = L"Could not restore browser foreground before field input.";
             return;
@@ -465,8 +627,21 @@ void ExecuteFormFields(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outc
             return;
         }
         outcome.formFieldsClicked++;
-        Sleep(120);
+        WaitForBrowserWorkflowState(
+            outcome,
+            L"BrowserWorkflowExecutor.ExecuteFormFields.field_focus_after_click",
+            L"browser_field_focus_ready_after_click",
+            120,
+            120,
+            L"WaitUntilBrowserFrameStable",
+            [&]() { return ForegroundMatchesBrowser(spec.browser, &outcome.window); });
         ActionResult selectAll = SendHotkeyGlobal(L"CTRL+A");
+        RecordBrowserWorkflowWaitNotReplaced(
+            outcome,
+            L"BrowserWorkflowExecutor.ExecuteFormFields.select_all_settle",
+            L"browser_field_select_all_settle",
+            80,
+            L"field selected text state is not reliably exposed across browser form controls");
         Sleep(80);
         TypeResult typed = TypeTextGlobal(field.value, L"human", -1);
         if (!selectAll.ok || !typed.ok) {
@@ -475,7 +650,14 @@ void ExecuteFormFields(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outc
             return;
         }
         outcome.formFieldsFilled++;
-        Sleep(250);
+        WaitForBrowserWorkflowState(
+            outcome,
+            L"BrowserWorkflowExecutor.ExecuteFormFields.field_value_verified",
+            L"browser_field_value_appears",
+            250,
+            250,
+            L"WaitUntilTextAppears",
+            [&]() { return VerifyFieldValue(outcome.window.hwnd, field); });
         bool valueOk = VerifyFieldValue(outcome.window.hwnd, field);
         if (!valueOk) {
             outcome.wrongFieldInputCount++;
@@ -488,7 +670,7 @@ void ExecuteFormFields(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outc
 }
 
 void ExecuteSubmit(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outcome) {
-    if (!EnsureBrowserForeground(spec.browser, outcome.window)) {
+    if (!EnsureBrowserForeground(spec.browser, outcome.window, &outcome.workflowWaits)) {
         outcome.stopCode = L"STOP_FOREGROUND_CHANGED";
         outcome.errorMessage = L"Could not restore browser foreground before submit.";
         return;
@@ -506,12 +688,23 @@ void ExecuteSubmit(const BrowserWorkflowSpec& spec, BrowserStepOutcome& outcome)
         return;
     }
     outcome.submitClicked = true;
-    Sleep(600);
-    ObserveBrowserPage(spec, outcome, 2500);
     std::wstring expected = spec.formSpec.submit.expectedResultMarker;
     if (expected.empty()) {
         expected = ObjectStringOr(spec.verificationHintJson, L"expected_result_marker", FirstMarker(spec));
     }
+    WaitForBrowserWorkflowState(
+        outcome,
+        L"BrowserWorkflowExecutor.ExecuteSubmit.submit_result_ready",
+        L"browser_submit_result_text_or_frame_ready",
+        600,
+        600,
+        L"WaitUntilTextAppears",
+        [&]() {
+            if (!EnsureBrowserForeground(spec.browser, outcome.window, &outcome.workflowWaits)) return false;
+            outcome.lastHaystack = BrowserHaystack(outcome.window.hwnd, outcome.window.title, ProcessNameForPid(outcome.window.pid));
+            return expected.empty() ? !outcome.lastHaystack.empty() : MatchesPattern(outcome.lastHaystack, expected);
+        });
+    ObserveBrowserPage(spec, outcome, 2500);
     outcome.submitResultVerified = !expected.empty() && MatchesPattern(outcome.lastHaystack, expected);
     if (!outcome.submitResultVerified) {
         outcome.stopCode = L"BLOCKED_UNVERIFIED_FORM_SUBMIT";
@@ -640,10 +833,12 @@ BrowserWorkflowExecutionResult RunBrowserWorkflowSpecFile(
                 BrowserWorkflowSpec recovered = schema.spec;
                 recovered.url = RecoveryUrlFromPolicy(schema.spec);
                 if (BrowserWorkflowUrlAllowedByPrefix(recovered.url, recovered.allowedUrlPrefix)) {
+                    std::vector<CoreWaitStateResult> initialWorkflowWaits = outcome.workflowWaits;
                     BrowserStepOutcome recoveryOutcome;
                     if (OpenBrowserHuman(recovered, recoveryOutcome)) {
                         ObserveBrowserPage(recovered, recoveryOutcome, 7000);
                         outcome = recoveryOutcome;
+                        outcome.workflowWaits.insert(outcome.workflowWaits.begin(), initialWorkflowWaits.begin(), initialWorkflowWaits.end());
                         outcome.wrongPageDetected = true;
                         outcome.recoveryAttempted = true;
                         outcome.recoverySuccess = recoveryOutcome.pageLoaded && recoveryOutcome.requiredMarkersVerified;
@@ -703,6 +898,7 @@ BrowserWorkflowExecutionResult RunBrowserWorkflowSpecFile(
     }
 
     std::wstring finalStatus = dryRun ? L"DRY_RUN_PASS" : outcome.finalStatus;
+    outcome.workflowWaitSummary = BuildWorkflowWaitStateSummary(outcome.workflowWaits);
     std::wstring resultJson = L"{\"schema_version\":\"6.8.0.browser_workflow.result\""
         L",\"workflow_id\":" + simplejson::Quote(schema.spec.workflowId) +
         L",\"workflow_type\":" + simplejson::Quote(schema.spec.workflowType) +
@@ -762,6 +958,8 @@ BrowserWorkflowExecutionResult RunBrowserWorkflowSpecFile(
         L",\"powershell_fake_form_success_used\":false"
         L",\"javascript_fake_form_success_used\":false"
         L",\"fake_form_execution\":false"
+        L",\"workflow_wait_summary\":" + WorkflowWaitStateSummaryJson(outcome.workflowWaitSummary) +
+        L",\"workflow_waits\":" + CoreWaitStateArrayJson(outcome.workflowWaits) +
         L",\"failure_attribution\":" + simplejson::Quote(outcome.stopCode.empty() ? L"" : L"browser_workflow_executor") +
         L",\"step_contract_path\":" + simplejson::Quote(stepContractPath) +
         L",\"compiled_plan_execution_result_path\":" + simplejson::Quote(compiledOptions.resultJson) +

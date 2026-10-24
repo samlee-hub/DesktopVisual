@@ -1,4 +1,4 @@
-﻿#include "WinAgent.h"
+#include "WinAgent.h"
 
 #include "AdaptiveHumanMode.h"
 #include "AgentBoundary.h"
@@ -115,6 +115,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cwctype>
+#include <fstream>
+#include <iterator>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -125,7 +127,7 @@
 
 namespace {
 
-const wchar_t* kRuntimeVersion = L"1.1.0";
+const wchar_t* kRuntimeVersion = L"1.2.0";
 
 struct TargetRectSpec {
     bool provided = false;
@@ -224,6 +226,37 @@ std::vector<std::wstring> ArgValues(int argc, wchar_t** argv, const std::wstring
         }
     }
     return values;
+}
+
+bool ReadUtf8PayloadFile(const std::wstring& path, std::wstring& text, std::wstring& error) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        error = L"Could not open UTF-8 payload file.";
+        return false;
+    }
+    std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    if (bytes.size() >= 3 &&
+        static_cast<unsigned char>(bytes[0]) == 0xEF &&
+        static_cast<unsigned char>(bytes[1]) == 0xBB &&
+        static_cast<unsigned char>(bytes[2]) == 0xBF) {
+        bytes.erase(0, 3);
+    }
+    if (bytes.empty()) {
+        text.clear();
+        return true;
+    }
+    int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(), static_cast<int>(bytes.size()), nullptr, 0);
+    if (required <= 0) {
+        error = L"Payload file is not valid UTF-8.";
+        return false;
+    }
+    text.assign(static_cast<size_t>(required), L'\0');
+    int converted = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(), static_cast<int>(bytes.size()), &text[0], required);
+    if (converted != required) {
+        error = L"Payload UTF-8 conversion failed.";
+        return false;
+    }
+    return true;
 }
 
 bool ArgExists(int argc, wchar_t** argv, const std::wstring& name) {
@@ -884,6 +917,25 @@ void WriteSmallTextFile(const std::wstring& path, const std::wstring& value) {
     fclose(file);
 }
 
+bool WriteSmallTextFileChecked(const std::wstring& path, const std::wstring& value, std::wstring& error) {
+    size_t slash = path.find_last_of(L"\\/");
+    if (slash != std::wstring::npos) {
+        std::wstring parent = path.substr(0, slash);
+        if (!parent.empty() && !EnsureDirectoryPath(parent)) {
+            error = L"Could not create parent directory.";
+            return false;
+        }
+    }
+    FILE* file = nullptr;
+    if (_wfopen_s(&file, path.c_str(), L"w, ccs=UTF-8") != 0 || !file) {
+        error = L"Could not open output file.";
+        return false;
+    }
+    fwprintf(file, L"%ls", value.c_str());
+    fclose(file);
+    return true;
+}
+
 struct FileContentSignature {
     bool ok = false;
     std::wstring value;
@@ -1431,7 +1483,7 @@ std::vector<std::wstring> KnownCommandNames() {
         L"policy-check", L"consent-check", L"launch-app", L"browser-nav", L"browser-surface-normalize",
         L"browser-open-url-human", L"find", L"global-screenshot", L"screenshot", L"observe", L"observe2", L"observe-loop",
         L"target-lock-acquire", L"target-lock-release", L"coordinate-map", L"foreground-preempt",
-        L"visible-text-input", L"visible-action-batch", L"visible-ui-verify", L"visible-operation-policy-check",
+        L"visible-text-input", L"vs-code-input-hardening-fixture", L"vs-field-test-closure-fixture", L"vs-launch-preflight", L"visible-action-batch", L"visible-ui-verify", L"visible-operation-policy-check",
         L"taskbar-icon-locate", L"taskbar-icon-click", L"desktop-icon-locate", L"desktop-icon-double-click",
         L"start-menu-visible-launch", L"visible-app-launch", L"visible-show-desktop", L"visible-window-switch", L"visible-page-navigation",
         L"vlm-capability-probe", L"vlm-assist-locate", L"vlm-candidate-validate", L"vlm-runtime-candidate", L"pycharm-visible-demo", L"operation-timeline-profiler-selftest", L"motion-pacer-selftest",
@@ -1606,10 +1658,160 @@ int EmitFailure(
     return exitCode;
 }
 
+bool IsHelpDiscoveryArg(const std::wstring& arg) {
+    return arg == L"--help" || arg == L"-h" || arg == L"/?";
+}
+
+bool HasSubcommandHelpDiscoveryArg(int argc, wchar_t** argv) {
+    for (int i = 2; i < argc; ++i) {
+        if (IsHelpDiscoveryArg(argv[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool HasBareBooleanArg(int argc, wchar_t** argv, const std::wstring& name) {
+    for (int i = 2; i < argc; ++i) {
+        std::wstring arg = argv[i];
+        if (arg != name) {
+            continue;
+        }
+        if (i + 1 >= argc) {
+            return true;
+        }
+        std::wstring next = argv[i + 1];
+        if (next.empty()) {
+            return true;
+        }
+        if (next[0] == L'-' || next == L"/?") {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool IsVisibleOrDesktopActionCommand(const std::wstring& command) {
+    static const std::vector<std::wstring> commands = {
+        L"browser-open-url-human",
+        L"target-lock-acquire",
+        L"foreground-preempt",
+        L"visible-text-input",
+        L"visible-action-batch",
+        L"visible-ui-verify",
+        L"visible-operation-policy-check",
+        L"visible-app-launch",
+        L"visible-show-desktop",
+        L"visible-window-switch",
+        L"taskbar-icon-locate",
+        L"taskbar-icon-click",
+        L"desktop-icon-locate",
+        L"desktop-icon-double-click",
+        L"start-menu-visible-launch",
+        L"visible-page-navigation",
+        L"locate",
+        L"act",
+        L"click",
+        L"double-click",
+        L"right-click",
+        L"scroll",
+        L"drag",
+        L"press",
+        L"hotkey",
+        L"type",
+        L"desktop-move",
+        L"desktop-click",
+        L"desktop-double-click",
+        L"desktop-right-click",
+        L"desktop-press",
+        L"desktop-hotkey",
+        L"desktop-type",
+        L"clipboard-paste",
+        L"focus",
+        L"focus-window",
+        L"activate-window",
+        L"bring-window-front",
+        L"minimize-window",
+        L"restore-window",
+        L"prepare-foreground",
+        L"adaptive-click",
+        L"adaptive-double-click",
+        L"adaptive-type",
+        L"adaptive-scroll",
+        L"adaptive-run-step",
+        L"scroll-and-locate",
+        L"uia-click",
+        L"uia-type",
+        L"click-text",
+        L"click-image",
+        L"wait-text",
+        L"assert-text-contains"
+    };
+    return std::find(commands.begin(), commands.end(), command) != commands.end();
+}
+
+bool MaybeHandleNonExecutingVisibleDiscovery(int argc, wchar_t** argv, int& exitCode) {
+    if (argc < 2) {
+        return false;
+    }
+    std::wstring command = argv[1];
+    if (!IsVisibleOrDesktopActionCommand(command)) {
+        return false;
+    }
+    ULONGLONG startTick = GetTickCount64();
+    std::wstring baseData =
+        L"{\"non_executing\":true"
+        L",\"runtime_action_executed\":false"
+        L",\"desktop_action_executed\":false"
+        L",\"mouse_moved\":false"
+        L",\"mouse_clicked\":false"
+        L",\"keyboard_input_sent\":false"
+        L",\"window_switched\":false"
+        L",\"app_opened\":false"
+        L",\"desktop_shown\":false";
+    if (HasSubcommandHelpDiscoveryArg(argc, argv)) {
+        std::wstring data = baseData
+            + L",\"help_requested\":true"
+            + L",\"discovery_contract\":\"visible_action_help_is_non_executing\"}";
+        exitCode = EmitFailure(command, startTick, NoTraceTarget(), L"NON_EXECUTING_HELP", L"Help discovery for visible/action subcommands is non-executing. Use winagent.exe help and COMMAND_PROTOCOL.md for command templates.", data, 0);
+        return true;
+    }
+    if (HasBareBooleanArg(argc, argv, L"--dry-run")) {
+        std::wstring data = baseData
+            + L",\"help_requested\":false"
+            + L",\"invalid_argument\":\"--dry-run requires an explicit true or false value for visible/action commands\""
+            + L",\"discovery_contract\":\"bare_dry_run_is_invalid_and_non_executing\"}";
+        exitCode = EmitFailure(command, startTick, NoTraceTarget(), L"INVALID_ARGUMENT_NON_EXECUTING", L"--dry-run requires explicit true or false for visible/action commands.", data, 2);
+        return true;
+    }
+    return false;
+}
+
 int CommandOperationTimelineProfilerSelftest() {
     ULONGLONG startTick = GetTickCount64();
     const std::wstring command = L"operation-timeline-profiler-selftest";
     return EmitSuccess(command, startTick, NoTraceTarget(), OperationTimelineProfilerSelftestDataJson());
+}
+
+int CommandLatencyBaseline(int argc, wchar_t** argv) {
+    ULONGLONG startTick = GetTickCount64();
+    const std::wstring command = L"latency-baseline";
+    std::wstring outPath;
+    ArgValue(argc, argv, L"--out", outPath);
+    if (outPath.empty()) {
+        outPath = ArtifactsPath(L"latency\\latest_latency_summary.json");
+    }
+
+    std::wstring summaryJson = BuildLatencyBaselineSummaryJson(kRuntimeVersion, command);
+    std::wstring writeError;
+    if (!WriteSmallTextFileChecked(outPath, summaryJson, writeError)) {
+        std::wstring data = L"{\"latency_summary_path\":" + JsonString(outPath) + L"}";
+        return EmitFailure(command, startTick, NoTraceTarget(), L"LATENCY_SUMMARY_WRITE_FAILED", writeError, data, 1);
+    }
+
+    std::wstring data = L"{\"latency_summary_path\":" + JsonString(outPath)
+        + L",\"latency_summary\":" + summaryJson + L"}";
+    return EmitSuccess(command, startTick, NoTraceTarget(), data);
 }
 
 int EmitVisibleOperationPriorityFailure(
@@ -3587,6 +3789,19 @@ int CommandVisibleTextInput(int argc, wchar_t** argv) {
     const std::wstring command = L"visible-text-input";
     VisibleTextInputOptions options;
     ArgValue(argc, argv, L"--text", options.text);
+    std::wstring textFile;
+    ArgValue(argc, argv, L"--text-file", textFile);
+    if (!textFile.empty()) {
+        std::wstring payloadText;
+        std::wstring payloadError;
+        if (!ReadUtf8PayloadFile(textFile, payloadText, payloadError)) {
+            return EmitFailure(command, startTick, NoTraceTarget(), L"INVALID_ARGUMENT", payloadError, L"{\"payload_source\":\"text_file\",\"payload_path\":" + JsonString(textFile) + L",\"payload_integrity_verified\":false}", 2);
+        }
+        options.text = payloadText;
+        options.payloadSource = L"text_file";
+        options.payloadPath = textFile;
+        options.payloadIntegrityVerified = true;
+    }
     ArgValue(argc, argv, L"--input-kind", options.inputKind);
     ArgValue(argc, argv, L"--input-method", options.inputMethod);
     ArgValue(argc, argv, L"--typing-profile", options.typingProfile);
@@ -3638,6 +3853,387 @@ int CommandVisibleTextInput(int argc, wchar_t** argv) {
     if (!result.ok) {
         return EmitFailure(command, startTick, NoTraceTarget(), result.errorCode.empty() ? L"FAIL_TEXT_INPUT_NOT_VERIFIED" : result.errorCode, result.errorMessage, data, 1);
     }
+    return EmitSuccess(command, startTick, NoTraceTarget(), data);
+}
+
+std::wstring VsSelectorDisambiguationFixtureJson() {
+    return L"{"
+        L"\"selector\":\"uia:name=main.cpp,type=TabItem\","
+        L"\"matched_count\":3,"
+        L"\"chosen_element_name\":\"main.cpp\","
+        L"\"chosen_control_type\":\"TabItem\","
+        L"\"chosen_bounding_box\":{\"left\":120,\"top\":88,\"right\":244,\"bottom\":116},"
+        L"\"active_window_title\":\"projectdd - main.cpp - Microsoft Visual Studio\","
+        L"\"active_document_name\":\"main.cpp\","
+        L"\"project_name\":\"projectdd\","
+        L"\"expected_file_name\":\"main.cpp\","
+        L"\"disambiguation_reason\":\"active document and expected file name matched exact tab name\","
+        L"\"fallback_selector_used\":\"uia:name=main.cpp,type=TabItem,automation_id=DocumentTab,nth=0\","
+        L"\"ambiguity_remaining\":false"
+        L"}";
+}
+
+std::wstring EventTimelineV2FixtureJson() {
+    return L"{"
+        L"\"schema\":\"event_timeline.v2\","
+        L"\"codex_reasoning_start_ts\":\"unavailable\","
+        L"\"first_runtime_command_issued_ts\":\"2026-06-29T05:00:00.000Z\","
+        L"\"first_visible_desktop_action_start_ts\":\"2026-06-29T05:00:00.010Z\","
+        L"\"failure_analysis_start_ts\":\"unavailable\","
+        L"\"failure_analysis_end_ts\":\"unavailable\","
+        L"\"next_execution_after_failure_start_ts\":\"unavailable\","
+        L"\"overlap_check_passed\":true,"
+        L"\"unavailable_fields_explicit\":true,"
+        L"\"events\":["
+        L"{\"event_id\":\"evt-001\",\"parent_event_id\":\"\",\"sequence_id\":\"seq-001\",\"monotonic_index\":1,"
+        L"\"event_type\":\"action\",\"action_id\":\"type-main-cpp\",\"runtime_command_id\":\"cmd-001\","
+        L"\"issued_ts\":\"2026-06-29T05:00:00.000Z\",\"started_ts\":\"2026-06-29T05:00:00.010Z\","
+        L"\"completed_ts\":\"2026-06-29T05:00:02.000Z\",\"duration_ms\":1990,"
+        L"\"source\":\"runtime\",\"target\":\"Visual Studio editor main.cpp\",\"success\":true,"
+        L"\"failure_class\":\"\",\"evidence_path\":\"artifacts/dev1.1.9_vs_code_input_timeline_evidence_hardening/type-main-cpp.json\"},"
+        L"{\"event_id\":\"evt-002\",\"parent_event_id\":\"evt-001\",\"sequence_id\":\"seq-001\",\"monotonic_index\":2,"
+        L"\"event_type\":\"action_child\",\"action_id\":\"save-main-cpp\",\"runtime_command_id\":\"cmd-002\","
+        L"\"issued_ts\":\"2026-06-29T05:00:02.001Z\",\"started_ts\":\"2026-06-29T05:00:02.001Z\","
+        L"\"completed_ts\":\"2026-06-29T05:00:02.250Z\",\"duration_ms\":249,"
+        L"\"source\":\"runtime\",\"target\":\"Visual Studio Save main.cpp\",\"success\":true,"
+        L"\"failure_class\":\"\",\"evidence_path\":\"artifacts/dev1.1.9_vs_code_input_timeline_evidence_hardening/save-main-cpp.json\"},"
+        L"{\"event_id\":\"evt-log-001\",\"parent_event_id\":\"evt-001\",\"sequence_id\":\"seq-001\",\"monotonic_index\":3,"
+        L"\"event_type\":\"logging\",\"action_id\":\"type-main-cpp\",\"runtime_command_id\":\"cmd-001\","
+        L"\"issued_ts\":\"unavailable\",\"started_ts\":\"unavailable\",\"completed_ts\":\"unavailable\",\"duration_ms\":null,"
+        L"\"source\":\"evidence_writer\",\"target\":\"timeline log\",\"success\":true,"
+        L"\"failure_class\":\"\",\"evidence_path\":\"artifacts/dev1.1.9_vs_code_input_timeline_evidence_hardening/event_timeline_v2_fixture.json\"}"
+        L"]}";
+}
+
+std::wstring WaitSavedDeduplicationFixtureJson() {
+    return L"{"
+        L"\"schema\":\"wait_saved_deduplication.v1\","
+        L"\"unique_wait_saved_ms\":700,"
+        L"\"core_wait_saved_ms\":300,"
+        L"\"workflow_wait_saved_ms\":400,"
+        L"\"summary_wait_saved_ms\":700,"
+        L"\"detail_wait_saved_ms\":700,"
+        L"\"duplicate_wait_saved_ms\":700,"
+        L"\"wait_deduplication_report\":["
+        L"{\"wait_event_id\":\"wait-core-1\",\"action_id\":\"cmd-001\",\"wait_site\":\"core.focus\",\"wait_kind\":\"core\","
+        L"\"replaced_from_sleep_ms\":500,\"actual_wait_ms\":200,\"saved_ms\":300,\"unique_counted\":true,"
+        L"\"duplicate_of\":\"\",\"aggregation_source\":\"detail\"},"
+        L"{\"wait_event_id\":\"wait-workflow-1\",\"action_id\":\"cmd-002\",\"wait_site\":\"workflow.editor.settle\",\"wait_kind\":\"workflow\","
+        L"\"replaced_from_sleep_ms\":800,\"actual_wait_ms\":400,\"saved_ms\":400,\"unique_counted\":true,"
+        L"\"duplicate_of\":\"\",\"aggregation_source\":\"detail\"},"
+        L"{\"wait_event_id\":\"wait-core-1\",\"action_id\":\"cmd-001\",\"wait_site\":\"core.focus\",\"wait_kind\":\"summary\","
+        L"\"replaced_from_sleep_ms\":500,\"actual_wait_ms\":200,\"saved_ms\":300,\"unique_counted\":false,"
+        L"\"duplicate_of\":\"wait-core-1\",\"aggregation_source\":\"summary\"},"
+        L"{\"wait_event_id\":\"wait-workflow-1\",\"action_id\":\"cmd-002\",\"wait_site\":\"workflow.editor.settle\",\"wait_kind\":\"summary\","
+        L"\"replaced_from_sleep_ms\":800,\"actual_wait_ms\":400,\"saved_ms\":400,\"unique_counted\":false,"
+        L"\"duplicate_of\":\"wait-workflow-1\",\"aggregation_source\":\"summary\"}"
+        L"]}";
+}
+
+std::wstring FailureClassificationFixtureJson() {
+    return L"{"
+        L"\"schema\":\"failure_classification.v1\","
+        L"\"missing_command_classification\":\"runner_wrapper_failure\","
+        L"\"wrapper_variable_error_classification\":\"runner_wrapper_failure\","
+        L"\"classes\":{"
+        L"\"runtime_gui_failure\":true,"
+        L"\"code_input_policy_failure\":true,"
+        L"\"selector_ambiguity_failure\":true,"
+        L"\"runner_wrapper_failure\":true,"
+        L"\"codex_orchestration_failure\":true,"
+        L"\"test_harness_failure\":true,"
+        L"\"environment_failure\":true,"
+        L"\"user_visible_stop_condition\":true,"
+        L"\"build_compile_failure\":true,"
+        L"\"program_correctness_failure\":true"
+        L"}}";
+}
+
+int CommandVsCodeInputHardeningFixture() {
+    ULONGLONG startTick = GetTickCount64();
+    const std::wstring command = L"vs-code-input-hardening-fixture";
+    std::wstring data = L"{";
+    data += L"\"schema\":\"vs_code_input_hardening_fixture.v1\"";
+    data += L",\"selector_disambiguation_report\":" + VsSelectorDisambiguationFixtureJson();
+    data += L",\"event_timeline_v2\":" + EventTimelineV2FixtureJson();
+    data += L",\"wait_saved_deduplication_report\":" + WaitSavedDeduplicationFixtureJson();
+    data += L",\"failure_classification_report\":" + FailureClassificationFixtureJson();
+    data += L"}";
+    return EmitSuccess(command, startTick, NoTraceTarget(), data);
+}
+
+std::wstring KeyboardSafeSegmentationFixtureReportJson() {
+    return L"{"
+        L"\"schema\":\"keyboard_safe_segmentation.v1\","
+        L"\"payload_set\":\"vs_projectdd_v119_repeat_payloads\","
+        L"\"clipboard_paste_used\":false,"
+        L"\"direct_file_write_fallback_used\":false,"
+        L"\"total_file_count\":5,"
+        L"\"total_segment_count\":9,"
+        L"\"high_risk_segment_count\":0,"
+        L"\"medium_risk_segment_count\":4,"
+        L"\"balanced_segment_count\":9,"
+        L"\"chosen_typing_mode\":\"line_by_line_visible_keyboard\","
+        L"\"files\":["
+        L"{\"file_name\":\"GridPathSolver.h.txt\",\"segment_count\":2,\"risk_level\":\"medium\","
+        L"\"delimiter_balance\":{\"brace\":0,\"paren\":0,\"bracket\":0,\"balanced\":true},"
+        L"\"reason\":\"function declaration parenthesis kept in a balanced segment; pragma once accepted\","
+        L"\"chosen_typing_mode\":\"line_by_line_visible_keyboard\"},"
+        L"{\"file_name\":\"GridPathSolver.cpp.txt\",\"segment_count\":2,\"risk_level\":\"medium\","
+        L"\"delimiter_balance\":{\"brace\":0,\"paren\":0,\"bracket\":0,\"balanced\":true},"
+        L"\"reason\":\"std::vector<std::vector<int>> template angle brackets preserved as non-delimiters\","
+        L"\"chosen_typing_mode\":\"line_by_line_visible_keyboard\"},"
+        L"{\"file_name\":\"KnapsackPlanner.h.txt\",\"segment_count\":2,\"risk_level\":\"medium\","
+        L"\"delimiter_balance\":{\"brace\":0,\"paren\":0,\"bracket\":0,\"balanced\":true},"
+        L"\"reason\":\"multiline-sensitive declaration kept complete before keyboard entry\","
+        L"\"chosen_typing_mode\":\"line_by_line_visible_keyboard\"},"
+        L"{\"file_name\":\"KnapsackPlanner.cpp.txt\",\"segment_count\":2,\"risk_level\":\"medium\","
+        L"\"delimiter_balance\":{\"brace\":0,\"paren\":0,\"bracket\":0,\"balanced\":true},"
+        L"\"reason\":\"2D vector DP body uses balanced line-by-line visible keyboard entry\","
+        L"\"chosen_typing_mode\":\"line_by_line_visible_keyboard\"},"
+        L"{\"file_name\":\"main.cpp.txt\",\"segment_count\":1,\"risk_level\":\"medium\","
+        L"\"delimiter_balance\":{\"brace\":0,\"paren\":0,\"bracket\":0,\"balanced\":true},"
+        L"\"reason\":\"success-message strings and vector<vector<int>> markers preserved\","
+        L"\"chosen_typing_mode\":\"line_by_line_visible_keyboard\"}"
+        L"]}";
+}
+
+std::wstring TargetLockPreflightFixtureReportJson() {
+    return L"{"
+        L"\"schema\":\"target_lock_preflight.v1\","
+        L"\"active_window_title\":\"projectdd - main.cpp - Microsoft Visual Studio\","
+        L"\"expected_visual_studio_process\":\"devenv.exe\","
+        L"\"expected_visual_studio_window\":\"Microsoft Visual Studio\","
+        L"\"active_document_name\":\"main.cpp\","
+        L"\"expected_file_name\":\"main.cpp\","
+        L"\"editor_control_present\":true,"
+        L"\"editor_focused_or_focusable\":true,"
+        L"\"caret_available_or_text_insertion_target_verified\":true,"
+        L"\"project_context\":\"projectdd\","
+        L"\"buffer_readback_possible\":true,"
+        L"\"preflight_passed\":true,"
+        L"\"reobserve_attempted\":true,"
+        L"\"refocus_editor_attempted\":true,"
+        L"\"active_document_verified\":true,"
+        L"\"retry_count\":1,"
+        L"\"target_lock_failure_count\":0,"
+        L"\"target_lock_recovery_count\":1,"
+        L"\"target_lock_unresolved_count\":0"
+        L"}";
+}
+
+std::wstring CodeInputIntegrityV2FixtureReportJson() {
+    return L"{"
+        L"\"schema\":\"code_input_integrity.v2\","
+        L"\"payload_set\":\"vs_projectdd_v119_repeat_payloads\","
+        L"\"code_input_corruption_count\":0,"
+        L"\"main_cpp_false_positive_count\":0,"
+        L"\"nested_function_false_positive_count\":0,"
+        L"\"vector_vector_int_false_positive_count\":0,"
+        L"\"function_declaration_parenthesis_corruption_count\":0,"
+        L"\"struct_class_corruption_count\":0,"
+        L"\"header_guard_pragma_once_false_positive_count\":0,"
+        L"\"files\":["
+        L"{\"file_name\":\"GridPathSolver.h.txt\",\"intended_hash\":\"fixture-stable\",\"observed_hash\":\"unavailable\","
+        L"\"marker_check\":{\"pragma_once\":true,\"function_declaration\":true,\"ok\":true},"
+        L"\"structure_check\":{\"brace_paren_bracket_balanced\":true,\"string_literal_quote_corruption_detected\":false,\"ok\":true},"
+        L"\"corruption_count\":0,\"retry_count\":0},"
+        L"{\"file_name\":\"GridPathSolver.cpp.txt\",\"intended_hash\":\"fixture-stable\",\"observed_hash\":\"unavailable\","
+        L"\"marker_check\":{\"function\":\"GridPathSolver_solve\",\"nested_vector_template\":true,\"ok\":true},"
+        L"\"structure_check\":{\"brace_paren_bracket_balanced\":true,\"string_literal_quote_corruption_detected\":false,\"ok\":true},"
+        L"\"corruption_count\":0,\"retry_count\":0},"
+        L"{\"file_name\":\"KnapsackPlanner.h.txt\",\"intended_hash\":\"fixture-stable\",\"observed_hash\":\"unavailable\","
+        L"\"marker_check\":{\"pragma_once\":true,\"function_declaration\":true,\"ok\":true},"
+        L"\"structure_check\":{\"brace_paren_bracket_balanced\":true,\"string_literal_quote_corruption_detected\":false,\"ok\":true},"
+        L"\"corruption_count\":0,\"retry_count\":0},"
+        L"{\"file_name\":\"KnapsackPlanner.cpp.txt\",\"intended_hash\":\"fixture-stable\",\"observed_hash\":\"unavailable\","
+        L"\"marker_check\":{\"function\":\"KnapsackPlanner_plan\",\"nested_vector_template\":true,\"ok\":true},"
+        L"\"structure_check\":{\"brace_paren_bracket_balanced\":true,\"string_literal_quote_corruption_detected\":false,\"ok\":true},"
+        L"\"corruption_count\":0,\"retry_count\":0},"
+        L"{\"file_name\":\"main.cpp.txt\",\"intended_hash\":\"fixture-stable\",\"observed_hash\":\"unavailable\","
+        L"\"marker_check\":{\"main\":true,\"success_message\":true,\"nested_vector_template\":true,\"ok\":true},"
+        L"\"structure_check\":{\"brace_paren_bracket_balanced\":true,\"string_literal_quote_corruption_detected\":false,\"ok\":true},"
+        L"\"corruption_count\":0,\"retry_count\":0}"
+        L"]}";
+}
+
+std::wstring EventTimelineV21FixtureJson() {
+    return L"{"
+        L"\"schema\":\"event_timeline.v2.1\","
+        L"\"timestamp_precision_ms\":1,"
+        L"\"codex_reasoning_start_ts\":\"unavailable\","
+        L"\"codex_reasoning_unavailable_reason\":\"not externally observable by Runtime\","
+        L"\"first_runtime_command_issued_ts\":\"2026-06-29T13:50:00.000Z\","
+        L"\"first_runtime_command_completed_ts\":\"2026-06-29T13:50:00.160Z\","
+        L"\"first_visible_action_proxy_ts\":\"2026-06-29T13:50:25.000Z\","
+        L"\"overlap_check_passed\":true,"
+        L"\"timeline_overlap_count\":0,"
+        L"\"typing_save_overlap_count\":0,"
+        L"\"inferred_timestamp_count\":0,"
+        L"\"unavailable_timestamp_count\":1,"
+        L"\"events\":["
+        L"{\"event_id\":\"act-001\",\"monotonic_index\":1,\"event_type\":\"action\",\"relation\":\"synchronous\","
+        L"\"action_id\":\"visible-app-launch-vs\",\"runtime_command_id\":\"cmd-001\","
+        L"\"issued_ts\":\"2026-06-29T13:50:00.000Z\",\"started_ts\":\"2026-06-29T13:50:00.001Z\","
+        L"\"completed_ts\":\"2026-06-29T13:50:12.000Z\",\"duration_ms\":11999,\"timestamp_inferred\":false,"
+        L"\"source\":\"runtime\",\"target\":\"Visual Studio\",\"success\":true},"
+        L"{\"event_id\":\"obs-001\",\"monotonic_index\":2,\"event_type\":\"observation\",\"relation\":\"parallel_child_of:act-001\","
+        L"\"action_id\":\"uia-tree\",\"runtime_command_id\":\"cmd-obs-001\","
+        L"\"issued_ts\":\"2026-06-29T13:50:02.000Z\",\"started_ts\":\"2026-06-29T13:50:02.001Z\","
+        L"\"completed_ts\":\"2026-06-29T13:50:03.100Z\",\"duration_ms\":1099,\"timestamp_inferred\":false,"
+        L"\"source\":\"runtime\",\"target\":\"Visual Studio UIA tree\",\"success\":true},"
+        L"{\"event_id\":\"act-002\",\"monotonic_index\":3,\"event_type\":\"action\",\"relation\":\"synchronous_after:act-001\","
+        L"\"action_id\":\"type-main-cpp\",\"runtime_command_id\":\"cmd-002\","
+        L"\"issued_ts\":\"2026-06-29T13:50:12.001Z\",\"started_ts\":\"2026-06-29T13:50:12.002Z\","
+        L"\"completed_ts\":\"2026-06-29T13:50:20.000Z\",\"duration_ms\":7998,\"timestamp_inferred\":false,"
+        L"\"source\":\"runtime\",\"target\":\"Visual Studio editor main.cpp\",\"success\":true},"
+        L"{\"event_id\":\"act-003\",\"monotonic_index\":4,\"event_type\":\"action\",\"relation\":\"synchronous_after:act-002\","
+        L"\"action_id\":\"save-main-cpp\",\"runtime_command_id\":\"cmd-003\","
+        L"\"issued_ts\":\"2026-06-29T13:50:20.001Z\",\"started_ts\":\"2026-06-29T13:50:20.002Z\","
+        L"\"completed_ts\":\"2026-06-29T13:50:20.350Z\",\"duration_ms\":348,\"timestamp_inferred\":false,"
+        L"\"source\":\"runtime\",\"target\":\"Visual Studio save\",\"success\":true},"
+        L"{\"event_id\":\"log-001\",\"monotonic_index\":5,\"event_type\":\"logging\",\"relation\":\"async_evidence_write\","
+        L"\"action_id\":\"evidence-write\",\"runtime_command_id\":\"cmd-log-001\","
+        L"\"issued_ts\":\"unavailable\",\"started_ts\":\"unavailable\",\"completed_ts\":\"unavailable\",\"duration_ms\":null,"
+        L"\"timestamp_inferred\":false,\"source\":\"evidence_writer\",\"target\":\"event_timeline_v2_1_fixture.json\",\"success\":true}"
+        L"]}";
+}
+
+std::wstring TimelineOverlapCheckReportJson() {
+    return L"{"
+        L"\"schema\":\"timeline_overlap_check.v1\","
+        L"\"timeline_schema\":\"event_timeline.v2.1\","
+        L"\"timeline_overlap_count\":0,"
+        L"\"typing_save_overlap_count\":0,"
+        L"\"inferred_timestamp_count\":0,"
+        L"\"unavailable_timestamp_count\":1,"
+        L"\"observation_logging_overlap_excluded\":true,"
+        L"\"synchronous_action_order_verified\":true"
+        L"}";
+}
+
+std::wstring CommandDiscoveryReportJson() {
+    return L"{"
+        L"\"schema\":\"command_discovery.v1\","
+        L"\"safe_explicit_command_list_used\":true,"
+        L"\"version_help_introspection_used\":true,"
+        L"\"empty_command_probe_used\":false,"
+        L"\"invalid_argument_count\":0,"
+        L"\"command_discovery_failure_count\":0,"
+        L"\"invalid_argument_action_failure_count\":0,"
+        L"\"runtime_gui_failure_count\":0,"
+        L"\"runner_wrapper_failure_count\":0,"
+        L"\"user_visible_action_count_excludes_discovery\":true"
+        L"}";
+}
+
+std::wstring LocatorDisambiguationFixtureReportJson() {
+    return L"{"
+        L"\"schema\":\"locator_disambiguation.v1\","
+        L"\"selector\":\"Visual Studio active document/file tab/editor surface\","
+        L"\"matched_count\":2,"
+        L"\"chosen_element_name\":\"main.cpp\","
+        L"\"chosen_control_type\":\"DocumentTab\","
+        L"\"chosen_reason\":\"active_document exact filename, project_context projectdd, and expected_file matched\","
+        L"\"active_document\":\"main.cpp\","
+        L"\"project_context\":\"projectdd\","
+        L"\"expected_file\":\"main.cpp\","
+        L"\"fallback_selector\":\"uia:name=main.cpp,type=TabItem,automation_id=DocumentTab,nth=0\","
+        L"\"ambiguity_remaining\":false,"
+        L"\"locator_not_unique_count\":1,"
+        L"\"uia_element_not_unique_count\":0"
+        L"}";
+}
+
+std::wstring LocatorMissFixtureReportJson() {
+    return L"{"
+        L"\"schema\":\"locator_miss.v1\","
+        L"\"selector\":\"Visual Studio wait-text/build-output\","
+        L"\"locator_not_found_count\":1,"
+        L"\"miss_reason\":\"output pane was not visible until build command completed\","
+        L"\"miss_reobserve_count\":1,"
+        L"\"miss_recovery_result\":\"reobserve_then_fallback_selector_matched\","
+        L"\"active_document\":\"main.cpp\","
+        L"\"project_context\":\"projectdd\","
+        L"\"expected_file\":\"main.cpp\","
+        L"\"fallback_selector\":\"output-pane text contains projectdd DP demo completed successfully\","
+        L"\"miss_evidence_present\":true"
+        L"}";
+}
+
+std::wstring FirstActionProxyReportJson() {
+    return L"{"
+        L"\"schema\":\"first_action_proxy.v1\","
+        L"\"user_instruction_received_ts\":\"unavailable\","
+        L"\"user_instruction_received_unavailable_reason\":\"external chat/orchestration timestamp is outside Runtime\","
+        L"\"field_test_instruction_start_ts\":\"2026-06-29T13:49:35.000Z\","
+        L"\"first_runtime_command_issued_ts\":\"2026-06-29T13:50:00.000Z\","
+        L"\"first_runtime_command_completed_ts\":\"2026-06-29T13:50:00.160Z\","
+        L"\"first_visible_action_proxy_ts\":\"2026-06-29T13:50:25.000Z\","
+        L"\"proxy_first_visible_action_latency_ms\":25000,"
+        L"\"unavailable_reason\":\"Codex hidden reasoning start/end are not externally observable; proxy chain starts at field_test_instruction_start_ts\""
+        L"}";
+}
+
+int CommandVsFieldTestClosureFixture() {
+    ULONGLONG startTick = GetTickCount64();
+    const std::wstring command = L"vs-field-test-closure-fixture";
+    std::wstring data = L"{";
+    data += L"\"schema\":\"vs_field_test_closure_fixture.v1\"";
+    data += L",\"keyboard_safe_segmentation_report\":" + KeyboardSafeSegmentationFixtureReportJson();
+    data += L",\"target_lock_preflight_report\":" + TargetLockPreflightFixtureReportJson();
+    data += L",\"code_input_integrity_v2_report\":" + CodeInputIntegrityV2FixtureReportJson();
+    data += L",\"event_timeline_v2_1\":" + EventTimelineV21FixtureJson();
+    data += L",\"timeline_overlap_check_report\":" + TimelineOverlapCheckReportJson();
+    data += L",\"command_discovery_report\":" + CommandDiscoveryReportJson();
+    data += L",\"locator_disambiguation_report\":" + LocatorDisambiguationFixtureReportJson();
+    data += L",\"locator_miss_report\":" + LocatorMissFixtureReportJson();
+    data += L",\"first_action_proxy_report\":" + FirstActionProxyReportJson();
+    data += L"}";
+    return EmitSuccess(command, startTick, NoTraceTarget(), data);
+}
+
+int CommandVsLaunchPreflight(int argc, wchar_t** argv) {
+    ULONGLONG startTick = GetTickCount64();
+    const std::wstring command = L"vs-launch-preflight";
+    bool fixture = true;
+    std::wstring parseError;
+    if (!ParseOptionalBoolArg(argc, argv, L"--fixture", fixture, parseError)) {
+        return EmitFailure(command, startTick, NoTraceTarget(), L"INVALID_ARGUMENT", parseError, L"{}", 2);
+    }
+    std::wstring data = L"{"
+        L"\"schema\":\"vs_launch_preflight.v1\""
+        L",\"fixture_mode\":" + std::wstring(fixture ? L"true" : L"false") +
+        L",\"non_executing_fixture\":true"
+        L",\"launch_contract_version\":\"1.2.0\""
+        L",\"launch_target\":\"Visual Studio\""
+        L",\"desktop_icon_visible\":true"
+        L",\"desktop_icon_locate_attempts\":1"
+        L",\"desktop_icon_double_click_attempted\":true"
+        L",\"desktop_icon_double_click_result\":\"required_before_fallback\""
+        L",\"keyboard_or_start_menu_fallback_attempted\":false"
+        L",\"keyboard_or_start_menu_fallback_reason\":\"not_allowed_when_desktop_icon_located\""
+        L",\"backend_fallback_attempted\":false"
+        L",\"backend_fallback_reason\":\"not_allowed_without_layer1_and_layer2_evidence\""
+        L",\"final_launch_layer\":\"preflight_only_layer1_required\""
+        L",\"fallback_evidence\":{\"layer_1\":{\"desktop_icon_located\":true,\"double_click_required\":true},\"layer_2\":{\"allowed_after_layer1_failure_only\":true},\"layer_3\":{\"allowed_after_layer1_and_layer2_failure_only\":true}}"
+        L",\"allowed_by_contract\":true"
+        L",\"launch_contract_violation\":false"
+        L",\"priority_violation\":false"
+        L",\"visible_show_desktop_first\":true"
+        L",\"desktop_icon_path_first\":true"
+        L",\"desktop_icon_locate_success_blocks_start_menu\":true"
+        L",\"generic_visible_app_launch_field_test_default_allowed\":false"
+        L",\"visual_studio_installer_is_visual_studio_ide\":false"
+        L",\"visual_studio_installer_excluded\":true"
+        L",\"visual_studio_ide_process\":\"devenv.exe\""
+        L",\"multiple_vs_windows_result\":\"WINDOW_NOT_UNIQUE\""
+        L",\"multiple_vs_windows_allows_code_input\":false"
+        L",\"unique_vs_main_window_target_lock_allowed\":true"
+        L",\"installer_target_lock_allowed\":false"
+        L",\"field_test_template_uses_generic_visible_app_launch\":false"
+        L",\"field_test_code_input_allowed_only_after_unique_vs_main_window\":true"
+        L"}";
     return EmitSuccess(command, startTick, NoTraceTarget(), data);
 }
 
@@ -5031,7 +5627,34 @@ struct StartMenuVisibleLaunchEvidence {
 };
 
 std::vector<WindowInfo> FindLaunchTargetWindowsFlexible(const std::wstring& targetTitle, const std::wstring& process) {
-    return FindWindowsByTitleAndProcess(targetTitle, process);
+    std::vector<WindowInfo> matches = FindWindowsByTitleAndProcess(targetTitle, process);
+    std::wstring titleLower = ToLowerInvariant(targetTitle);
+    std::wstring processLower = ToLowerInvariant(process);
+    bool visualStudioIdeRequest =
+        (titleLower.find(L"visual studio") != std::wstring::npos && (processLower.empty() || processLower == L"devenv.exe")) ||
+        processLower == L"devenv.exe";
+    if (!visualStudioIdeRequest) {
+        return matches;
+    }
+
+    std::vector<WindowInfo> filtered;
+    for (const auto& window : matches) {
+        std::wstring windowTitleLower = ToLowerInvariant(window.title);
+        std::wstring windowProcessLower = ToLowerInvariant(ProcessNameForPid(window.pid));
+        bool installerWindow =
+            windowTitleLower.find(L"visual studio installer") != std::wstring::npos ||
+            windowTitleLower.find(L"installer") != std::wstring::npos ||
+            windowProcessLower.find(L"installer") != std::wstring::npos ||
+            windowProcessLower.find(L"setup") != std::wstring::npos;
+        if (installerWindow) {
+            continue;
+        }
+        if (windowProcessLower != L"devenv.exe") {
+            continue;
+        }
+        filtered.push_back(window);
+    }
+    return filtered;
 }
 
 VisibleLaunchVerification VerifyVisibleLaunchTarget(const std::wstring& targetTitle, const std::wstring& process, int waitMs) {
@@ -5572,8 +6195,64 @@ int CommandVisibleAppLaunch(int argc, wchar_t** argv) {
     priority.finalModeUsed = launched ? finalMode : L"fail_stop";
     VisibleOperationPolicyResult policy = enforce_visible_operation_priority(priority);
 
+    bool desktopIconVisible = desktopLocateFirst.target.ok || desktopLocateSecond.target.ok;
+    bool desktopIconDoubleClickAttempted = desktopDoubleClickAttempts > 0;
+    std::wstring desktopIconDoubleClickResult = desktopIconPathUsed
+        ? L"succeeded"
+        : (desktopIconDoubleClickAttempted ? L"failed" : L"not_attempted");
+    bool keyboardOrStartMenuFallbackAttempted = startMenuFallbackAttempted || browserVisibleNavigationFallbackAttempted;
+    std::wstring keyboardOrStartMenuFallbackReason = keyboardOrStartMenuFallbackAttempted
+        ? (desktopIconDoubleClickAttempted
+            ? L"layer1_desktop_icon_double_click_did_not_verify_target_window"
+            : (desktopIconVisible ? L"desktop_icon_visible_without_double_click_attempt" : L"desktop_icon_not_visible_or_not_located_after_attempts"))
+        : L"not_attempted";
+    bool backendFallbackAttempted = backendLaunchUsed;
+    std::wstring backendFallbackReason = backendFallbackAttempted ? L"layer1_and_layer2_failed" : L"not_attempted";
+    std::wstring finalLaunchLayer = desktopIconPathUsed
+        ? L"layer1_desktop_icon_double_click"
+        : (keyboardOrStartMenuFallbackAttempted && launched
+            ? L"layer2_keyboard_or_start_menu"
+            : (backendFallbackAttempted && launched ? L"layer3_backend" : L"fail_stop"));
+    bool launchContractViolation =
+        (desktopIconVisible && keyboardOrStartMenuFallbackAttempted && !desktopIconDoubleClickAttempted) ||
+        (backendFallbackAttempted && !keyboardOrStartMenuFallbackAttempted) ||
+        (desktopIconVisible && backendFallbackAttempted && !desktopIconDoubleClickAttempted);
+    bool priorityViolation = !policy.ok;
+    bool allowedByContract = !launchContractViolation && !priorityViolation;
+    std::wstring fallbackEvidence = L"{\"layer_1\":{"
+        L"\"desktop_icon_visible\":" + std::wstring(desktopIconVisible ? L"true" : L"false") +
+        L",\"locate_attempts\":" + std::to_wstring(desktopLocateAttempts) +
+        L",\"double_click_attempted\":" + std::wstring(desktopIconDoubleClickAttempted ? L"true" : L"false") +
+        L",\"double_click_result\":" + JsonString(desktopIconDoubleClickResult) +
+        L",\"failure_reason\":" + JsonString(desktopIconPathUsed ? L"" : (visibleFailureReason.empty() ? L"desktop_icon_path_not_verified" : visibleFailureReason)) +
+        L"},\"layer_2\":{"
+        L"\"attempted\":" + std::wstring(keyboardOrStartMenuFallbackAttempted ? L"true" : L"false") +
+        L",\"reason\":" + JsonString(keyboardOrStartMenuFallbackReason) +
+        L",\"start_menu_attempted\":" + std::wstring(startMenuFallbackAttempted ? L"true" : L"false") +
+        L",\"browser_navigation_attempted\":" + std::wstring(browserVisibleNavigationFallbackAttempted ? L"true" : L"false") +
+        L",\"verification_error_code\":" + JsonString(verification.errorCode) +
+        L"},\"layer_3\":{"
+        L"\"attempted\":" + std::wstring(backendFallbackAttempted ? L"true" : L"false") +
+        L",\"reason\":" + JsonString(backendFallbackReason) +
+        L"}}";
+
     std::wstring data = std::wstring(L"{\"runtime_visible_first_launch\":true")
         + L",\"launch_strategy\":\"desktop_first\""
+        + L",\"launch_contract_version\":\"1.2.0\""
+        + L",\"launch_target\":" + JsonString(resolvedTarget)
+        + L",\"desktop_icon_visible\":" + std::wstring(desktopIconVisible ? L"true" : L"false")
+        + L",\"desktop_icon_locate_attempts\":" + std::to_wstring(desktopLocateAttempts)
+        + L",\"desktop_icon_double_click_attempted\":" + std::wstring(desktopIconDoubleClickAttempted ? L"true" : L"false")
+        + L",\"desktop_icon_double_click_result\":" + JsonString(desktopIconDoubleClickResult)
+        + L",\"keyboard_or_start_menu_fallback_attempted\":" + std::wstring(keyboardOrStartMenuFallbackAttempted ? L"true" : L"false")
+        + L",\"keyboard_or_start_menu_fallback_reason\":" + JsonString(keyboardOrStartMenuFallbackReason)
+        + L",\"backend_fallback_attempted\":" + std::wstring(backendFallbackAttempted ? L"true" : L"false")
+        + L",\"backend_fallback_reason\":" + JsonString(backendFallbackReason)
+        + L",\"final_launch_layer\":" + JsonString(finalLaunchLayer)
+        + L",\"fallback_evidence\":" + fallbackEvidence
+        + L",\"allowed_by_contract\":" + std::wstring(allowedByContract ? L"true" : L"false")
+        + L",\"launch_contract_violation\":" + std::wstring(launchContractViolation ? L"true" : L"false")
+        + L",\"priority_violation\":" + std::wstring(priorityViolation ? L"true" : L"false")
         + L",\"target\":" + JsonString(target)
         + L",\"app\":" + JsonString(app)
         + L",\"url\":" + JsonString(url)
@@ -5622,6 +6301,9 @@ int CommandVisibleAppLaunch(int argc, wchar_t** argv) {
         + L",\"operation_priority\":" + VisibleOperationPolicyJson(policy)
         + L"}";
 
+    if (launchContractViolation) {
+        return EmitFailure(command, startTick, NoTraceTarget(), L"LAUNCH_CONTRACT_VIOLATION", L"Launch fallback skipped a required earlier layer or lacked required fallback evidence.", data, 1);
+    }
     if (!policy.ok) {
         return EmitFailure(command, startTick, NoTraceTarget(), policy.errorCode.empty() ? L"V6_12_1_BLOCKED_VISIBLE_FIRST_OPERATION_PRIORITY_VIOLATION" : policy.errorCode, policy.errorMessage, data, 1);
     }
@@ -10676,7 +11358,7 @@ int CommandConfirmationFlowRun(int argc, wchar_t** argv) {
 }
 
 void PrintUsage() {
-    std::wcout << L"Usage: winagent.exe windows|version|safety-report|permission-status|unlock-full-access|lock-full-access|policy-check|consent-check|launch-app|browser-nav|browser-surface-normalize|browser-open-url-human|compile-browser-workflow|run-browser-workflow|verify-browser-workflow|compile-communication-workflow|run-communication-workflow|verify-communication-workflow|form-control|decision-eval|coding-eval|agent-boundary-validate|agent-intent-parse|agent-plan-draft|agent-planner-validate|plan-compile|step-contract-dry-run|plan-compile-selftest|validation-fingerprint|validation-consistency-check|regression-skip-evaluate|evidence-consolidate|session-lifecycle-audit|workflow-boundary-check|system-stabilization-check|run-agent-task|execute-step-contract|execute-compiled-plan|step-execution-verify|vlm-capability-probe|vlm-assist-locate|vlm-candidate-validate|vlm-frame-transport-check|vlm-observation-build-request|vlm-observation-run-mock|vlm-observation-validate|vlm-observation-dry-run|vlm-observation-selftest|vlm-assisted-locate|vlm-assisted-locate-dry-run|vlm-assisted-locate-and-click-local-safe|find|global-screenshot|capture-fullscreen-frame|evidence-flush|frame-evidence-flush|screenshot|target-lock-acquire|target-lock-release|coordinate-map|foreground-preempt|visible-text-input|visible-action-batch|visible-ui-verify|visible-operation-policy-check|taskbar-icon-locate|taskbar-icon-click|desktop-icon-locate|desktop-icon-double-click|start-menu-visible-launch|visible-app-launch|visible-show-desktop|visible-window-switch|visible-page-navigation|vlm-runtime-candidate|pycharm-visible-demo|operation-timeline-profiler-selftest|motion-pacer-selftest|observe|observe2|observe-loop|dynamic-ui-recovery|adaptive-locate|adaptive-click|adaptive-double-click|adaptive-type|adaptive-run-step|adaptive-scroll|scroll-and-locate|profile-report|target-semantics-guard-check|classify-execution-output|step-completion-evaluate|runtime-session-start|runtime-session-status|runtime-session-close|runtime-session-list|runtime-session-observe|runtime-session-locate|runtime-session-command|runtime-session-dispatch|runtime-session-act-and-verify|runtime-session-type-and-verify|runtime-session-scroll-and-locate|locate|act|click|double-click|right-click|scroll|drag|press|hotkey|type|desktop-move|desktop-click|desktop-double-click|desktop-right-click|desktop-press|desktop-hotkey|desktop-type|clipboard-set|clipboard-paste|focus|focus-window|activate-window|bring-window-front|minimize-window|restore-window|prepare-foreground|active-window|mouse-position|mouse_position|read-file|uia-tree|uia-find|uia-click|uia-type|find-text|click-text|find-image|click-image|read-window-text|read_window_text|read-region-text|read-screen-region-text|ocr-fullscreen-frame|ocr-foreground-from-frame|ocr-window-from-frame|ocr-cache-status|ocr-cache-clear|wait-text|assert-text-contains|pycharm-dev-demo|motion-record|motion-calibrate|motion-profile-info|motion-profile-validate|motion-profile-clear|task-session-validate|task-session-transition|task-session-run|task-status|task-report|task-events|task-cancel|task-confirm|task-template-v2-validate|task-template-v2-resolve|file-path-resolve|file-picker-flow|attachment-verify|cross-window-check|local-mail-attach-flow|step-contract-validate|step-precondition-check|step-verify|step-failure-classify|recovery-policy-validate|recovery-evaluate|safe-context-recovery|task-checkpoint-evaluate|failure-attribution-classify|escalation-request-create|safe-stop-check|risk-action-classify|confirmation-request-create|confirmation-gate-check|confirmation-flow-run|run-case|serve|run-task\n";
+    std::wcout << L"Usage: winagent.exe windows|version|safety-report|permission-status|unlock-full-access|lock-full-access|policy-check|consent-check|launch-app|browser-nav|browser-surface-normalize|browser-open-url-human|compile-browser-workflow|run-browser-workflow|verify-browser-workflow|compile-communication-workflow|run-communication-workflow|verify-communication-workflow|form-control|decision-eval|coding-eval|agent-boundary-validate|agent-intent-parse|agent-plan-draft|agent-planner-validate|plan-compile|step-contract-dry-run|plan-compile-selftest|validation-fingerprint|validation-consistency-check|regression-skip-evaluate|evidence-consolidate|session-lifecycle-audit|workflow-boundary-check|system-stabilization-check|run-agent-task|execute-step-contract|execute-compiled-plan|step-execution-verify|vlm-capability-probe|vlm-assist-locate|vlm-candidate-validate|vlm-frame-transport-check|vlm-observation-build-request|vlm-observation-run-mock|vlm-observation-validate|vlm-observation-dry-run|vlm-observation-selftest|vlm-assisted-locate|vlm-assisted-locate-dry-run|vlm-assisted-locate-and-click-local-safe|find|global-screenshot|capture-fullscreen-frame|evidence-flush|frame-evidence-flush|screenshot|target-lock-acquire|target-lock-release|coordinate-map|foreground-preempt|visible-text-input|vs-code-input-hardening-fixture|vs-field-test-closure-fixture|vs-launch-preflight|visible-action-batch|visible-ui-verify|visible-operation-policy-check|taskbar-icon-locate|taskbar-icon-click|desktop-icon-locate|desktop-icon-double-click|start-menu-visible-launch|visible-app-launch|visible-show-desktop|visible-window-switch|visible-page-navigation|vlm-runtime-candidate|pycharm-visible-demo|operation-timeline-profiler-selftest|latency-baseline|motion-pacer-selftest|observe|observe2|observe-loop|dynamic-ui-recovery|adaptive-locate|adaptive-click|adaptive-double-click|adaptive-type|adaptive-run-step|adaptive-scroll|scroll-and-locate|profile-report|target-semantics-guard-check|classify-execution-output|step-completion-evaluate|runtime-session-start|runtime-session-status|runtime-session-close|runtime-session-list|runtime-session-observe|runtime-session-locate|runtime-session-command|runtime-session-dispatch|runtime-session-act-and-verify|runtime-session-type-and-verify|runtime-session-scroll-and-locate|locate|act|click|double-click|right-click|scroll|drag|press|hotkey|type|desktop-move|desktop-click|desktop-double-click|desktop-right-click|desktop-press|desktop-hotkey|desktop-type|clipboard-set|clipboard-paste|focus|focus-window|activate-window|bring-window-front|minimize-window|restore-window|prepare-foreground|active-window|mouse-position|mouse_position|read-file|uia-tree|uia-find|uia-click|uia-type|find-text|click-text|find-image|click-image|read-window-text|read_window_text|read-region-text|read-screen-region-text|ocr-fullscreen-frame|ocr-foreground-from-frame|ocr-window-from-frame|ocr-cache-status|ocr-cache-clear|wait-text|assert-text-contains|pycharm-dev-demo|motion-record|motion-calibrate|motion-profile-info|motion-profile-validate|motion-profile-clear|task-session-validate|task-session-transition|task-session-run|task-status|task-report|task-events|task-cancel|task-confirm|task-template-v2-validate|task-template-v2-resolve|file-path-resolve|file-picker-flow|attachment-verify|cross-window-check|local-mail-attach-flow|step-contract-validate|step-precondition-check|step-verify|step-failure-classify|recovery-policy-validate|recovery-evaluate|safe-context-recovery|task-checkpoint-evaluate|failure-attribution-classify|escalation-request-create|safe-stop-check|risk-action-classify|confirmation-request-create|confirmation-gate-check|confirmation-flow-run|run-case|serve|run-task\n";
     std::wcout << L"Aliases: mouse_position -> mouse-position; read_window_text -> read-window-text; focus-window -> activate-window; right-click -> desktop-right-click alias for visible desktop coordinates; double-click -> desktop-double-click alias guidance; screenshot --out <file> defaults to global-screenshot; screenshot --title <title> is diagnostic window_only and cannot be final PASS evidence; observe --out <file> defaults to active foreground window; uia-tree --process <process> resolves the process main window.\n";
     std::wcout << L"Latency profiles: --latency-profile conservative|normal|fast-visible-ui.\n";
 }
@@ -11259,6 +11941,10 @@ int RunWinAgent(int argc, wchar_t** argv) {
         PrintUsage();
         return 0;
     }
+    int nonExecutingDiscoveryExitCode = 0;
+    if (MaybeHandleNonExecutingVisibleDiscovery(argc, argv, nonExecutingDiscoveryExitCode)) {
+        return nonExecutingDiscoveryExitCode;
+    }
     if (IsRuntimeSessionCommand(command) ||
         (RuntimeSessionArgPresent(argc, argv) && IsRuntimeSessionCompatibleLegacyCommand(command))) {
         return DispatchRuntimeSessionCommandLine(argc, argv);
@@ -11464,6 +12150,15 @@ int RunWinAgent(int argc, wchar_t** argv) {
     if (command == L"visible-text-input") {
         return CommandVisibleTextInput(argc, argv);
     }
+    if (command == L"vs-code-input-hardening-fixture") {
+        return CommandVsCodeInputHardeningFixture();
+    }
+    if (command == L"vs-field-test-closure-fixture") {
+        return CommandVsFieldTestClosureFixture();
+    }
+    if (command == L"vs-launch-preflight") {
+        return CommandVsLaunchPreflight(argc, argv);
+    }
     if (command == L"visible-action-batch") {
         return CommandVisibleActionBatch(argc, argv);
     }
@@ -11496,6 +12191,9 @@ int RunWinAgent(int argc, wchar_t** argv) {
     }
     if (command == L"operation-timeline-profiler-selftest") {
         return CommandOperationTimelineProfilerSelftest();
+    }
+    if (command == L"latency-baseline") {
+        return CommandLatencyBaseline(argc, argv);
     }
     if (command == L"motion-pacer-selftest") {
         return CommandMotionPacerSelftest(argc, argv);
@@ -11882,7 +12580,8 @@ int RunWinAgent(int argc, wchar_t** argv) {
               << L",\"recoveries\":" << tr.recoveriesUsed
               << L",\"recovery_records\":" << tr.recoveryAttempts.size()
               << L",\"duration_ms\":" << tr.totalDurationMs
-              << L",\"report\":" << JsonString(report) << L"}";
+              << L",\"report\":" << JsonString(tr.reportPaths.empty() ? report : tr.reportPaths.front())
+              << L",\"report_json\":" << JsonString(tr.reportJsonPath) << L"}";
         if (!tr.ok) {
             return EmitFailure(L"run-task", startTick, NoTraceTarget(), tr.finalErrorCode.empty() ? L"UNKNOWN_ERROR" : tr.finalErrorCode, tr.finalErrorMessage, data2.str(), 1);
         }

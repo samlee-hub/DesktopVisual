@@ -2,6 +2,8 @@
 
 Adapters must parse the JSON envelope from `winagent.exe` and preserve reports.
 
+Current launch authority: `docs\LAUNCH_CONTRACT.md`.
+
 Unified handling:
 
 1. If `ok=false`, read `error.code` or `error_code`.
@@ -30,7 +32,7 @@ Limited recovery is only the configured Recovery Strategy Engine declared by `ru
 
 Use `observe-locate-act-verify`; do not enter sensitive flows.
 
-Fallback discipline violations are failures even when the final state looks correct. One failure cannot directly move to fallback. Entering fallback requires two bounded visible attempts or strict surface-impossible evidence, and entering backend fallback requires visible path failure plus keyboard fallback failure.
+Fallback discipline violations are failures even when the final state looks correct. One failure cannot directly move to fallback. For launch tasks, desktop icon double-click is Layer 1, keyboard/Start Menu is Layer 2 only with Layer 1 failure evidence, and backend is Layer 3 only with Layer 1 and Layer 2 failure evidence. If `launch_contract_violation=true`, stop and report failure/BLOCKED. Visible/action `--help`, `-h`, `/?`, and bare `--dry-run` discovery forms are non-executing.
 
 Active protection or security interception is STOP, not fallback.
 

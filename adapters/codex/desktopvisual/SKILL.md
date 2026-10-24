@@ -1,26 +1,39 @@
 ---
 name: desktopvisual
-description: Use DesktopVisual public release runtime from E:\desktopvisualproject\desktop_release through desktopvisual.ps1.
+description: Use DesktopVisual 1.2.0 local Windows desktop runtime. Developer root is D:\desktopvisual; normal local-use entrypoint is D:\desktop_release\desktopvisual.ps1.
 ---
 
 # DesktopVisual
 
 DesktopVisual is a local Windows desktop runtime, not a built-in tool.
 
-Normal local-use and public-release project path:
+Current version: v1.2.0.
+Current launch authority: `docs\LAUNCH_CONTRACT.md`.
 
-E:\desktopvisualproject\desktop_release
+Developer project path:
 
-Developer maintenance project path:
+D:\desktopvisual
 
-E:\desktopvisualproject\desktopvisual
+Normal local-use / daily runtime path:
 
-When the user says "使用desktopvisual", use:
+D:\desktop_release
 
-E:\desktopvisualproject\desktop_release\desktopvisual.ps1
+When this developer source is used directly for development, build, or selftest work, the wrapper is:
 
-For ordinary desktop operation, prefer the desktop_release wrapper.
+D:\desktopvisual\desktopvisual.ps1
 
-Do not use E:\desktopvisualproject\desktopvisual as the normal local-use entrypoint.
+For normal local use, demo, and Codex default DesktopVisual runtime, use:
 
-Do not use v1.1.4 Fast Use Manifest, high-level workflow, student-grade preset, or initial-state surface-decision logic in this v1.1.0 release line.
+D:\desktop_release\desktopvisual.ps1
+
+Daily winagent path:
+
+D:\desktop_release\bin\winagent.exe
+
+Use `D:\desktopvisual` only for development tasks, source edits, build/selftest, or version evolution. Do not treat `D:\desktop_release` as a development main tree.
+
+For app, browser, software, `.lnk`, `.url`, or desktop shortcut startup, follow the Launch Contract: desktop icon double-click first, keyboard/Start Menu second only with evidence, backend third only with Layer 1 and Layer 2 failure evidence. Visible/action `--help` and bare `--dry-run` discovery must be non-executing.
+
+Public release / public restricted release / public-dist are not created by this skill by default.
+
+Do not use v1.1.4 Fast Use Manifest, high-level workflow, student-grade preset, or initial-state surface-decision logic.

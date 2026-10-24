@@ -6,7 +6,7 @@ param(
     [string]$ImagePath = '',
     [string]$Target = '',
     [string]$RawOutputPath = '',
-    [int]$TimeoutMs = 60000,
+    [int]$TimeoutMs = 0,
     [ValidateSet('', 'unavailable', 'timeout', 'invalid_json', 'valid', 'low_confidence', 'not_found')]
     [string]$Simulation = ''
 )
@@ -17,6 +17,19 @@ if ($Help) {
     Write-Host 'Usage: .\tools\codex_vlm_provider.ps1 -Mode probe|locate -ImagePath <png> -RawOutputPath <path> [-Target <text>] [-TimeoutMs <ms>]'
     exit 0
 }
+
+$DefaultProbeTimeoutMs = 12000
+$DefaultInferenceTimeoutMs = 60000
+$MetadataTimeoutMs = 5000
+$TimeoutMs = if ($TimeoutMs -gt 0) {
+    $TimeoutMs
+} elseif ($Mode -eq 'probe') {
+    $DefaultProbeTimeoutMs
+} else {
+    $DefaultInferenceTimeoutMs
+}
+$EffectiveMetadataTimeoutMs = [Math]::Max(1000, [Math]::Min($TimeoutMs, $MetadataTimeoutMs))
+$TimeoutSentinel = '__DESKTOPVISUAL_TIMEOUT__'
 
 function Write-ProviderText {
     param([string]$Path, [string]$Text)
@@ -153,22 +166,34 @@ function Quote-ProcessArgument {
 }
 
 function Get-CodexVersion {
-    param([System.Management.Automation.CommandInfo]$Command)
+    param(
+        [System.Management.Automation.CommandInfo]$Command,
+        [int]$Timeout
+    )
     try {
         $source = Resolve-CodexExecutable -Command $Command
-        $version = & $source --version 2>$null
-        return ([string]$version).Trim()
+        $run = Invoke-WithTimeout -Exe $source -ArgumentList @('--version') -StdinText '' -Timeout $Timeout
+        if ($run.timed_out) {
+            return $script:TimeoutSentinel
+        }
+        return ([string]$run.output).Trim()
     } catch {
         return ''
     }
 }
 
 function Get-CodexExecHelp {
-    param([System.Management.Automation.CommandInfo]$Command)
+    param(
+        [System.Management.Automation.CommandInfo]$Command,
+        [int]$Timeout
+    )
     try {
         $source = Resolve-CodexExecutable -Command $Command
-        $help = & $source exec --help 2>$null
-        return ([string]$help)
+        $run = Invoke-WithTimeout -Exe $source -ArgumentList @('exec', '--help') -StdinText '' -Timeout $Timeout
+        if ($run.timed_out) {
+            return $script:TimeoutSentinel
+        }
+        return ([string]$run.output)
     } catch {
         return ''
     }
@@ -260,6 +285,21 @@ if ([string]::IsNullOrWhiteSpace($ImagePath) -or -not (Test-Path -LiteralPath $I
     exit 0
 }
 
+if ($Mode -eq 'probe' -and $Simulation -eq 'valid') {
+    Write-ProviderText -Path $RawOutputPath -Text 'simulated provider available'
+    ConvertTo-ProviderJson @{
+        ok = $true
+        provider = $Provider
+        provider_status = 'VLM_AVAILABLE'
+        codex_cli_version = 'simulated-codex-cli'
+        image_input_supported = $true
+        raw_output_path = $RawOutputPath
+        reason = 'simulated provider available'
+        exit_code = 0
+    }
+    exit 0
+}
+
 $codex = Get-Command codex -ErrorAction SilentlyContinue
 if (-not $codex) {
     Write-ProviderText -Path $RawOutputPath -Text 'codex command not found'
@@ -276,8 +316,37 @@ if (-not $codex) {
     exit 0
 }
 
-$codexVersion = Get-CodexVersion -Command $codex
-$execHelp = Get-CodexExecHelp -Command $codex
+$codexVersion = Get-CodexVersion -Command $codex -Timeout $EffectiveMetadataTimeoutMs
+if ($codexVersion -eq $TimeoutSentinel) {
+    Write-ProviderText -Path $RawOutputPath -Text 'codex --version timed out'
+    ConvertTo-ProviderJson @{
+        ok = $false
+        provider = $Provider
+        provider_status = 'VLM_UNAVAILABLE'
+        codex_cli_version = ''
+        image_input_supported = $false
+        raw_output_path = $RawOutputPath
+        reason = 'codex --version timed out'
+        exit_code = 124
+    }
+    exit 0
+}
+
+$execHelp = Get-CodexExecHelp -Command $codex -Timeout $EffectiveMetadataTimeoutMs
+if ($execHelp -eq $TimeoutSentinel) {
+    Write-ProviderText -Path $RawOutputPath -Text 'codex exec --help timed out'
+    ConvertTo-ProviderJson @{
+        ok = $false
+        provider = $Provider
+        provider_status = 'VLM_UNAVAILABLE'
+        codex_cli_version = $codexVersion
+        image_input_supported = $false
+        raw_output_path = $RawOutputPath
+        reason = 'codex exec --help timed out'
+        exit_code = 124
+    }
+    exit 0
+}
 $imageSupported = $execHelp -match '--image'
 
 if (-not $imageSupported) {

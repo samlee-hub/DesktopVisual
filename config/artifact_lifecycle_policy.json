@@ -1,0 +1,83 @@
+{
+  "policy_version": "artifact_lifecycle.v1",
+  "quarantine_root": ".desktopvisual_local\\artifact_lifecycle",
+  "developer_scope": {
+    "scope": "developer_version",
+    "state_path": ".desktopvisual_local\\artifact_lifecycle\\developer_versions\\<version>",
+    "retention": "keep current version and previous version",
+    "release_actions_allowed": false
+  },
+  "release_action_scope": {
+    "scope": "release_action",
+    "state_path": ".desktopvisual_local\\artifact_lifecycle\\release_actions\\<action_id>",
+    "sequence_manifest": ".desktopvisual_local\\artifact_lifecycle\\release_actions\\ACTION_SEQUENCE.json",
+    "retention": "keep current action and previous action",
+    "developer_versions_allowed": false
+  },
+  "protected_paths": [
+    "src\\",
+    "include\\",
+    "tools\\",
+    "config\\",
+    "scripts\\",
+    "build.ps1",
+    "VERSION",
+    "README.md",
+    "AGENTS.md",
+    "COMMAND_PROTOCOL.md",
+    "CHANGELOG.md",
+    "CURRENT_EXECUTION_CONTRACT.md",
+    "docs\\",
+    "artifact_lifecycle_selftest.ps1",
+    "artifacts\\EVIDENCE_INDEX.md"
+  ],
+  "protected_patterns": [
+    "artifacts\\dev*\\",
+    "artifacts\\evidence\\",
+    "artifacts\\field_test_summary.md",
+    "artifacts\\project_snapshot\\",
+    "artifacts\\release*\\",
+    "artifacts\\experience_memory\\",
+    "artifacts\\workflow_templates\\",
+    "artifacts\\selector_learning\\",
+    "artifacts\\stable_window_baselines\\",
+    "artifacts\\future_learning\\",
+    "artifacts\\learned_acceleration_profiles\\",
+    "artifacts\\user_approved_feedback\\",
+    "tests\\fixtures\\",
+    "*.ps1"
+  ],
+  "allowed_temp_patterns": [
+    "*.tmp",
+    "*.bak",
+    "*.orig",
+    "*.log.tmp",
+    "PowerShell_transcript*.txt",
+    "*scratch*",
+    "*debug_dump*",
+    "*orphan_output*",
+    "*temporary*"
+  ],
+  "ambiguous_patterns": [
+    "*.keep",
+    "*ambiguous*"
+  ],
+  "ambiguous_policy": "record only; do not move; do not delete",
+  "persistent_learning_protection": true,
+  "protected_learning_assets": [
+    "experience memory",
+    "workflow templates",
+    "selector learning",
+    "stable window baselines",
+    "future learned acceleration profiles",
+    "user-approved retained feedback"
+  ],
+  "sync_exclusion_required": true,
+  "required_robocopy_exclusion": "/XD \".git\" \".desktopvisual_local\" \"obj\" \"build\" \".vs\" \".idea\" \".vscode\" \"**pycache**\" \"node_modules\"",
+  "notes": [
+    "scripts, docs, and this policy are project assets and may sync from developer to local-use release.",
+    ".desktopvisual_local is local state and must never be mirrored across trees.",
+    "developer_versions is developer-local state only.",
+    "release_actions is local-use release state only."
+  ]
+}

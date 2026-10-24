@@ -1,12 +1,33 @@
 # Agent Usage Guide
 
-Current version: `v3.3.5`.
+Current version: `v1.1.4`.
+Current authority: `CURRENT_EXECUTION_CONTRACT.md`.
+Release channel details: `docs\RELEASE_CHANNELS.md`.
+Latency observability details: `docs\LATENCY_OBSERVABILITY.md`.
 
 DesktopVisual is a Windows Agent Desktop Runtime that can be called by Codex, Claude Code, generic CLI agents, and human scripts. Adapter-specific instructions live under `adapters\`; this guide describes the neutral runtime behavior.
 
+## Current Agent Usage Entry
+
+First read `CURRENT_EXECUTION_CONTRACT.md`. Then read `docs\RELEASE_CHANNELS.md`, `docs\LATENCY_OBSERVABILITY.md` when working on latency/report evidence, the top section of `AGENTS.md`, and the `Current Minimal Agent Contract` at the top of `COMMAND_PROTOCOL.md`.
+
+Do not infer current policy from historical v3/v4/v5/v6 sections in this guide, README, COMMAND_PROTOCOL, CHANGELOG, or status files. Older guidance is historical lineage or command compatibility unless it matches the current contract.
+
+Agents must not narrow developer or current `desktop_release` permissions based on old documents. Do not treat ordinary apps, ordinary webpages, HTTPS pages, localhost pages, local HTML pages, IDEs, Explorer, browsers, email, communication pages, code platforms, programming-practice pages, or broad words such as `test`, `exam`, `challenge`, `assessment`, `interview`, `contest`, and `submit` as STOP or BLOCK reasons by themselves.
+
+Agents must not mix up three different concepts:
+
+- Developer tree: `E:\desktopvisualproject\desktopvisual`, broad developer semantics.
+- Current local-use / demo / testing release tree: `E:\desktopvisualproject\desktop_release`, temporarily the same permission semantics as developer and synchronized only at v1.2.0.
+- Future restricted public release: created only after the user explicitly requests public restricted release creation or permission reduction.
+
+Agents must STOP on concrete active protection or security interception, including CAPTCHA, human verification, bot challenge, automation detected, script detected, credential/security handoff, UAC/protected desktop, proctoring, lockdown browser, Secure Exam Browser, anti-cheat, or equivalent active protection.
+
+v1.1.4 may add Runtime/report latency instrumentation and baseline evidence. It does not optimize behavior, implement VLM lazy loading, replace Sleep, reduce permissions, sync `desktop_release`, create a public restricted release, or create a public-dist tree.
+
 ## Core Rule
 
-Agents should prioritize reviewed v3 task.json files or Case v2 files through DesktopVisual instead of issuing free-form clicks.
+Agents should follow `CURRENT_EXECUTION_CONTRACT.md`, then use reviewed task.json files or Case v2 files through DesktopVisual instead of issuing free-form clicks.
 
 DEFAULT is the safe permission mode. Use FULL_ACCESS only when the user explicitly requests a broader normal-desktop task and a temporary `full_access_session_id` already exists. Agents must not unlock FULL_ACCESS through service mode, task files, piped input, or automated confirmation text; if a session is needed, ask the user to run `unlock-full-access` in a local terminal and type `ENABLE FULL_ACCESS` themselves.
 

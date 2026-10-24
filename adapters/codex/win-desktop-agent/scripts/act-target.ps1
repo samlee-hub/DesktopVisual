@@ -14,10 +14,10 @@ if (-not (Test-Path $WinAgent)) { Write-Error "winagent.exe not found. Build fir
 
 Write-Host "=== Act: $Action on $Selector ===" -ForegroundColor Cyan
 
-$args = @('act', '--title', $Title, '--selector', $Selector, '--action', $Action)
-if ($Text) { $args += '--text'; $args += $Text }
+$agentArgs = @('act', '--title', $Title, '--selector', $Selector, '--action', $Action)
+if ($Text) { $agentArgs += '--text'; $agentArgs += $Text }
 
-$output = & $WinAgent @args 2>&1
+$output = & $WinAgent @agentArgs 2>&1
 $exit = $LASTEXITCODE
 
 try { $json = $output | ConvertFrom-Json } catch { Write-Error "Not JSON: $output"; exit 1 }

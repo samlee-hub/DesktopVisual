@@ -4,7 +4,7 @@ Every adapter must follow these safety stop rules.
 
 DesktopVisual is a Windows-only, agent-agnostic, auditable, safety-bounded Computer Use Runtime. Adapter wording must not imply unrestricted desktop control, hidden automation, detection bypass, or protected-flow automation.
 
-DesktopVisual is a Windows visible-first desktop runtime, not a background script executor. Use visible-app-launch for app, URL, local shortcut, .lnk, .url, and webpage shortcut launches. App launch is desktop-first. Start Menu visible search is a fallback, not the first choice. backend fallback is not the default path.
+DesktopVisual is a Windows visible-first desktop runtime, not a background script executor. Use `docs\LAUNCH_CONTRACT.md` for app, URL, local shortcut, .lnk, .url, and webpage shortcut launches. App launch is desktop icon double-click first. Start Menu visible search is Layer 2 fallback only with Layer 1 failure evidence. backend fallback is Layer 3 only with Layer 1 and Layer 2 failure evidence.
 
 - Read `winagent.exe version` and check `data.manifest_loaded`.
 - Prefer `winagent.exe safety-report` at adapter startup when the task involves desktop input.
@@ -17,7 +17,9 @@ DesktopVisual is a Windows visible-first desktop runtime, not a background scrip
 - Stop on `FULL_ACCESS_SESSION_REQUIRED`, `FULL_ACCESS_REQUIRES_INTERACTIVE_CONFIRMATION`, `USER_TAKEOVER_REQUIRED`, `CREDENTIAL_INPUT_DETECTED`, `CAPTCHA_DETECTED`, `LOOP_GUARD_STOP`, `WINDOW_SPAWN_LOOP`, `URL_REDIRECT_LOOP`, `NO_PROGRESS_DETECTED`, `REPEATED_ACTION_LIMIT`, `SCROLL_NO_PROGRESS`, `FIELD_NOT_UNIQUE`, and `FIELD_CONFIDENCE_LOW`.
 - Do not guess coordinates after a locator failure.
 - One failure cannot directly move to fallback.
-- Entering fallback requires two bounded visible attempts or strict surface-impossible evidence.
+- Entering fallback requires evidence, `fallback_reason`, `fallback_evidence`, and `allowed_by_contract`.
+- If launch output has `launch_contract_violation=true`, stop and report failure/BLOCKED.
+- Visible/action `--help`, `-h`, `/?`, and bare `--dry-run` discovery forms are non-executing.
 - target_not_found, uia_not_found, ocr_not_found, and click_failed alone are not surface-impossible evidence.
 - Do not jump to shortcuts because they are faster.
 - Do not jump to backend because it is convenient.

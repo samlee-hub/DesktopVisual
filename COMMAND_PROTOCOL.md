@@ -1,8 +1,57 @@
 ﻿# WinAgent Command Protocol
 
-Current trusted version: `DesktopVisual 1.1.0`.
-Current active development stage: `DesktopVisual 1.1.0 Public Release Permission Alignment, Agent Efficiency, and Release Tree Sync`.
-Next planned stage: `post-v1.1.0 GitHub sync on explicit user request`.
+Current trusted version: `DesktopVisual 1.1.12`.
+Current active development stage: `DesktopVisual 1.1.12 Launch Contract Unification, Safe CLI Discovery, and VS Startup Convergence`.
+Next planned stage: stop after protected v1.1.12 local-use sync; do not enter v1.2.0.
+
+## Current Minimal Agent Contract
+
+- Highest-priority current contract: `CURRENT_EXECUTION_CONTRACT.md`.
+- Startup authority: `docs\LAUNCH_CONTRACT.md`.
+- Release channel semantics entry: `docs\RELEASE_CHANNELS.md`.
+- Latency observability entry: `docs\LATENCY_OBSERVABILITY.md`.
+- VS code-input and evidence hardening entry: `docs\VS_CODE_INPUT_AND_EVIDENCE_HARDENING.md`.
+- Invalid artifact lifecycle entry: `docs\INVALID_ARTIFACT_LIFECYCLE.md`.
+- Core wait-state hardening entry: `docs\CORE_WAIT_STATE_HARDENING.md`.
+- Workflow wait-state hardening entry: `docs\WORKFLOW_WAIT_STATE_HARDENING.md`.
+- VLM lazy loading entry: `docs\VLM_LAZY_LOADING.md`.
+- Minimum current files to read: `CURRENT_EXECUTION_CONTRACT.md`, `docs\LAUNCH_CONTRACT.md`, `docs\RELEASE_CHANNELS.md`, `docs\LATENCY_OBSERVABILITY.md`, `docs\INVALID_ARTIFACT_LIFECYCLE.md` when touching invalid artifacts or sync isolation, `docs\VS_CODE_INPUT_AND_EVIDENCE_HARDENING.md` when touching VS code-input/evidence hardening, `docs\CORE_WAIT_STATE_HARDENING.md` when touching core wait-state behavior, `docs\WORKFLOW_WAIT_STATE_HARDENING.md` when touching workflow wait-state behavior, `docs\WORKSPACE_HYGIENE.md` and `docs\FIELD_TEST_READINESS.md` when preparing field tests or cleaning evidence, `docs\VLM_LAZY_LOADING.md` when touching VLM provider probe/cache/degrade behavior, `AGENTS.md` top section, this `Current Minimal Agent Contract`, and `docs\DEVELOPMENT_STATUS.md` current state.
+- Current v1.1.x permission boundary: developer tree and current local-use `desktop_release` keep the same broad ordinary app/web/IDE/Explorer/local/communication semantics; keywords or broad categories do not trigger STOP by themselves.
+- Do not infer permission reduction from the word `release`.
+- Sync `desktop_release` only after v1.1.12 developer validation passes and only with the protected exclusion template.
+- Do not create a public restricted release at v1.1.12.
+- `.desktopvisual_local` is lifecycle local state and must never be mirrored across developer/release trees.
+- `robocopy /MIR` sync must include `/XD ".git" ".desktopvisual_local" "obj" "build" ".vs" ".idea" ".vscode" "__pycache__" "node_modules"` and exclude `field_test_*`, `release_sync_*`, `local_action_*`, and `behavior_action_*` evidence paths.
+- Developer `developer_versions` state must not copy to `desktop_release`; release `release_actions` state must not be deleted by mirror sync.
+- Do not apply future restricted public policy to the current local-use/demo release tree.
+- Launch startup follows `docs\LAUNCH_CONTRACT.md`: desktop icon double-click first, keyboard/Start Menu second only with evidence, backend third only with Layer 1 and Layer 2 failure evidence, and `launch_contract_violation=true` for unsupported layer skipping.
+- Visible/action subcommands treat `--help`, `-h`, and `/?` as non-executing help. Bare `--dry-run` is `INVALID_ARGUMENT_NON_EXECUTING`.
+- Visual Studio startup excludes Visual Studio Installer, requires a unique `devenv.exe` IDE window before code input, and returns `WINDOW_NOT_UNIQUE` or equivalent for multiple VS windows.
+- Latency observability remains a Runtime/report capability from v1.1.4. v1.1.5 extends it with VLM lazy/cache/degrade fields, v1.1.6 extends it with core wait-state fields, and v1.1.7 extends it with workflow wait-state fields. v1.1.10 added targeted event timeline v2.1 and closure evidence fixtures without changing VLM lazy/cache/degrade behavior. v1.1.11 adds separated invalid artifact lifecycle rules without Runtime behavior changes. v1.1.12 changes launch/CLI discovery behavior only as documented in `docs\LAUNCH_CONTRACT.md`.
+- `first_action_latency_ms` means the elapsed time from when Runtime receives a task or command to the start of the first real externally visible action.
+- Latency fields added in v1.1.4 remain the baseline for v1.1.5-v1.1.11 comparison and field-test readiness.
+- v1.1.5 changes only VLM provider lazy probe/cache/degrade behavior; Runtime-only paths must not probe VLM.
+- v1.1.6 may replace core execution-chain fixed sleeps with bounded state waits that preserve the original maximum wait budget and return early only when state is ready.
+- v1.1.7 may replace workflow-level fixed waits with bounded state waits that preserve the original maximum wait budget and return early only when workflow state is ready.
+- v1.1.12 may add launch contract docs, launch evidence fields, non-executing CLI discovery handling, VS preflight fixture logic, lifecycle path resolver scripts, selftests, protected sync checks, and evidence only.
+- Current STOP boundary: real active protection or security interception, including CAPTCHA, human verification, bot challenge, automation/script detection, credential/security handoff, UAC/protected desktop, proctoring, lockdown browser, Secure Exam Browser, anti-cheat, or equivalent active protection.
+- Current v1.1.12 modification scope: launch contract docs, launch-related Runtime evidence/argument handling, VS preflight fixture logic, lifecycle resolver scripts, selftests, current docs, version metadata, development evidence, and protected local-use sync evidence.
+- Current v1.1.12 forbidden changes: no permission reduction, no PermissionManager semantic change, no safety manifest or safety.conf permission semantic change, no public restricted release creation, no public-dist tree creation, no v1.2.0 entry, no clipboard paste default, no direct file write default fallback, no Visual Studio UI bypass or field test, no STOP-condition weakening, and no VLM behavior or timeout change.
+- Older protocol sections and old v3/v4/v5/v6 stage rules below are historical lineage unless `CURRENT_EXECUTION_CONTRACT.md` explicitly restates them as current.
+
+## DesktopVisual 1.1.12 Launch Contract Commands
+
+- `vs-launch-preflight [--fixture true|false]`
+
+`vs-launch-preflight` is a non-executing logic/evidence fixture for Visual Studio startup convergence selftests. It reports the v1.1.12 launch contract fields, desktop icon first rule, VS Installer exclusion, multi-VS ambiguity block, and the rule that VS code input is allowed only after a unique `devenv.exe` IDE main window is verified.
+
+Startup commands must follow `docs\LAUNCH_CONTRACT.md`. `visible-app-launch` may remain a generic launcher, but it must internally honor desktop icon double-click first, emit the v1.1.12 launch contract fields, and never use Start Menu or backend launch ahead of a visible desktop icon path. VS field-test templates must use fixed VS startup steps and must not discover syntax through visible subcommand `--help`.
+
+Visible/action command discovery is non-executing:
+
+- `visible-app-launch --target "Visual Studio" --dry-run` returns `INVALID_ARGUMENT_NON_EXECUTING`.
+- `visible-show-desktop --help`, `desktop-icon-locate --help`, `desktop-icon-double-click --help`, `visible-window-switch --help`, `visible-text-input --help`, and `target-lock-acquire --help` return help or `NON_EXECUTING_HELP`.
+- These discovery forms must not move the mouse, click, show desktop, switch windows, open apps, or type.
 
 ## DesktopVisual 1.1.0 Public Permission And Report-Level Protocol
 
@@ -312,7 +361,13 @@ Commands:
 - `target-lock-release [--target-title <partial_title>|--target-hwnd <hwnd>|--target-process <process>]`
 - `coordinate-map --direction pixel-to-screen|screen-to-pixel --capture-scope global_desktop|window_only --capture-left <x> --capture-top <y> --capture-width <w> --capture-height <h> [--target-left <x> --target-top <y> --target-right <x> --target-bottom <y>]`
 - `foreground-preempt [--dry-run true|false]`
-- `visible-text-input --text <text> [--input-kind form|message|code|search|mail|filename|command|editor|chat] [--input-method real_keyboard_events|line_by_line_keyboard|code_editor_keyboard] --target-title <partial_title> [--require-target-lock true] [--dry-run true]`
+- `visible-text-input --text <text> [--text-file <utf8_payload_file>] [--input-kind form|message|code|search|mail|filename|command|editor|chat|code_editor_text] [--input-method real_keyboard_events|line_by_line_keyboard|code_editor_keyboard] --target-title <partial_title> [--require-target-lock true] [--dry-run true]`
+
+`--text-file` passes a UTF-8 request payload into Runtime so shell/argv escaping cannot alter code quotes before visible keyboard input. It is not a source-file write path; code input still goes through the visible keyboard policy and editor surface verification.
+
+- `vs-code-input-hardening-fixture`
+
+Returns fixture reports for selector disambiguation, `event_timeline.v2`, wait saved de-duplication, and failure classification.
 - `visible-action-batch --plan <json> --out <result.json>`
 - `visible-ui-verify --global-final-frame true --target-lock true|--allow-global-desktop true --expected-output-visible true`
 - `visible-operation-policy-check --operation-type <type> [--final-mode-used visible_mouse_keyboard|keyboard_shortcut_fallback|backend_fallback] [--visible-mouse-keyboard-attempted true|false] [--keyboard-shortcut-attempted true|false] [--backend-fallback-used true|false]`
@@ -487,7 +542,9 @@ Commands:
 - `experience-memory-record --input <record_input.json> --store-root <dir> --output <record.json>`
 - `experience-memory-query --store-root <dir> [--workflow-type <type>] [--failure-category <category>] [--source-version <version>] --output <result.json>`
 - `experience-memory-report --store-root <dir> --output <report.json> [--markdown-output <report.md>]`
-- `failure-attribution-normalize --workflow-type <type> --execution-result <result> --failure-code <code> --output <result.json>`
+- `failure-attribution-normalize --workflow-type <type> --execution-result <result> --failure-code <code> --failure-type <type> --failure-reason <text> --output <result.json>`
+
+The result includes `failure_class`. Missing command, empty runtime subcommand, wrapper variable error, command-not-found, and PowerShell parameter binding failures normalize to `runner_wrapper_failure`.
 - `memory-safety-check --input <record.json> --output <result.json>`
 - `memory-safety-check --store-root <dir> --output <result.json>`
 - `v6-10-experience-memory-check --store-root <dir> --output <result.json>`

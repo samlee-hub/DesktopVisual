@@ -1,10 +1,12 @@
 #pragma once
 
+#include "CoreWaitState.h"
 #include "WindowFinder.h"
 
 #include <windows.h>
 
 #include <string>
+#include <vector>
 
 struct ForegroundPreparationResult {
     bool ok = false;
@@ -35,6 +37,8 @@ struct ForegroundPreparationResult {
     std::wstring errorCode;
     std::wstring errorMessage;
     long long durationMs = 0;
+    std::vector<CoreWaitStateResult> coreWaits;
+    CoreWaitStateSummary coreWaitSummary;
 };
 
 bool DetectAgentHostWindow(HWND hwnd, WindowInfo& info);

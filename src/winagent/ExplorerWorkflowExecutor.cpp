@@ -1,6 +1,7 @@
 #include "ExplorerWorkflowExecutor.h"
 
 #include "CaseRunner.h"
+#include "CoreWaitState.h"
 #include "ExecutionEvidencePack.h"
 #include "ExplorerContextMenuHandler.h"
 #include "ExplorerWorkflow.h"
@@ -278,52 +279,92 @@ bool LaunchExplorerSelectFile(const std::wstring& filePath, std::wstring& errorM
     return true;
 }
 
-bool FindExplorerWindowForFolder(const std::wstring& folder, WindowInfo& selected) {
+CoreWaitStateOptions ExplorerWorkflowWaitOptions(
+    const std::wstring& waitSite,
+    const std::wstring& waitReason,
+    int waitBudgetMs,
+    int waitReplacedFromSleepMs,
+    const std::wstring& waitStatePredicate) {
+    CoreWaitStateOptions options;
+    options.waitSite = waitSite;
+    options.waitReason = waitReason;
+    options.waitBudgetMs = waitBudgetMs;
+    options.waitPollIntervalMs = 50;
+    options.waitReplacedFromSleepMs = waitReplacedFromSleepMs;
+    options.waitStatePredicate = waitStatePredicate;
+    return options;
+}
+
+bool TryFindExplorerWindowForFolder(
+    const std::wstring& folder,
+    WindowInfo& selected,
+    bool allowLooseEmptyFolderFallback) {
     std::wstring folderName = BaseName(ExplorerWorkflowNormalizePath(folder));
-    for (int attempt = 0; attempt < 30; ++attempt) {
-        HWND foreground = GetForegroundWindow();
-        if (foreground) {
-            WindowInfo active;
-            active.hwnd = foreground;
-            GetWindowThreadProcessId(foreground, &active.pid);
-            int length = GetWindowTextLengthW(foreground);
-            if (length > 0) {
-                std::wstring title(static_cast<size_t>(length) + 1, L'\0');
-                int copied = GetWindowTextW(foreground, title.data(), length + 1);
-                title.resize(copied > 0 ? static_cast<size_t>(copied) : 0);
-                active.title = title;
-            }
-            GetWindowRect(foreground, &active.rect);
-            if (ContainsInsensitive(ProcessNameForPid(active.pid), L"explorer.exe") &&
-                (folderName.empty() || ContainsInsensitive(active.title, folderName))) {
-                selected = active;
+    HWND foreground = GetForegroundWindow();
+    if (foreground) {
+        WindowInfo active;
+        active.hwnd = foreground;
+        GetWindowThreadProcessId(foreground, &active.pid);
+        int length = GetWindowTextLengthW(foreground);
+        if (length > 0) {
+            std::wstring title(static_cast<size_t>(length) + 1, L'\0');
+            int copied = GetWindowTextW(foreground, title.data(), length + 1);
+            title.resize(copied > 0 ? static_cast<size_t>(copied) : 0);
+            active.title = title;
+        }
+        GetWindowRect(foreground, &active.rect);
+        if (ContainsInsensitive(ProcessNameForPid(active.pid), L"explorer.exe") &&
+            (folderName.empty() || ContainsInsensitive(active.title, folderName))) {
+            selected = active;
+            return true;
+        }
+    }
+    std::vector<WindowInfo> fallback;
+    for (const auto& window : EnumerateVisibleTopLevelWindows()) {
+        if (!ContainsInsensitive(ProcessNameForPid(window.pid), L"explorer.exe")) continue;
+        if (!folderName.empty() && !ContainsInsensitive(window.title, folderName)) {
+            fallback.push_back(window);
+            continue;
+        }
+        selected = window;
+        return true;
+    }
+    if (foreground) {
+        for (const auto& window : fallback) {
+            if (window.hwnd == foreground) {
+                selected = window;
                 return true;
             }
         }
-        std::vector<WindowInfo> fallback;
-        for (const auto& window : EnumerateVisibleTopLevelWindows()) {
-            if (!ContainsInsensitive(ProcessNameForPid(window.pid), L"explorer.exe")) continue;
-            if (!folderName.empty() && !ContainsInsensitive(window.title, folderName)) {
-                fallback.push_back(window);
-                continue;
-            }
-            selected = window;
-            return true;
-        }
-        if (foreground) {
-            for (const auto& window : fallback) {
-                if (window.hwnd == foreground) {
-                    selected = window;
-                    return true;
-                }
-            }
-        }
-        if (folderName.empty() && !fallback.empty() && attempt > 10) {
-            selected = fallback.front();
-            return true;
-        }
-        Sleep(200);
     }
+    if (folderName.empty() && allowLooseEmptyFolderFallback && !fallback.empty()) {
+        selected = fallback.front();
+        return true;
+    }
+    return false;
+}
+
+bool FindExplorerWindowForFolder(
+    const std::wstring& folder,
+    WindowInfo& selected,
+    std::vector<CoreWaitStateResult>* workflowWaits = nullptr) {
+    ULONGLONG start = GetTickCount64();
+    CoreWaitStateOptions waitOptions = ExplorerWorkflowWaitOptions(
+        L"ExplorerWorkflowExecutor.FindExplorerWindowForFolder",
+        L"explorer_window_ready",
+        6000,
+        6000,
+        L"WaitUntilExplorerWindowReady");
+    CoreWaitStateResult wait = WaitForWorkflowState(
+        L"ExplorerWorkflowExecutor",
+        L"explorer",
+        waitOptions,
+        [&]() {
+            bool allowLooseFallback = static_cast<long long>(GetTickCount64() - start) >= 2000;
+            return TryFindExplorerWindowForFolder(folder, selected, allowLooseFallback);
+        });
+    if (workflowWaits) workflowWaits->push_back(wait);
+    if (wait.stateReady) return true;
     return false;
 }
 
@@ -410,7 +451,64 @@ struct ExplorerStepOutcome {
     bool recoverySuccess = false;
     bool wrongFolderDetected = false;
     bool wrongContextDetected = false;
+    std::vector<CoreWaitStateResult> workflowWaits;
+    WorkflowWaitStateSummary workflowWaitSummary;
 };
+
+void AddExplorerWorkflowWait(ExplorerStepOutcome& outcome, const CoreWaitStateResult& wait) {
+    outcome.workflowWaits.push_back(wait);
+}
+
+CoreWaitStateResult WaitForExplorerWorkflowState(
+    ExplorerStepOutcome& outcome,
+    const std::wstring& waitSite,
+    const std::wstring& waitReason,
+    int waitBudgetMs,
+    int waitReplacedFromSleepMs,
+    const std::wstring& waitStatePredicate,
+    const std::function<bool()>& stateReady) {
+    CoreWaitStateResult wait = WaitForWorkflowState(
+        L"ExplorerWorkflowExecutor",
+        L"explorer",
+        ExplorerWorkflowWaitOptions(waitSite, waitReason, waitBudgetMs, waitReplacedFromSleepMs, waitStatePredicate),
+        stateReady);
+    AddExplorerWorkflowWait(outcome, wait);
+    return wait;
+}
+
+void RecordExplorerWorkflowWaitNotReplaced(
+    ExplorerStepOutcome& outcome,
+    const std::wstring& waitSite,
+    const std::wstring& waitReason,
+    int fixedSleepMs,
+    const std::wstring& waitNotReplacedReason) {
+    AddExplorerWorkflowWait(outcome, RecordWorkflowWaitNotReplaced(
+        L"ExplorerWorkflowExecutor",
+        L"explorer",
+        waitSite,
+        waitReason,
+        fixedSleepMs,
+        waitNotReplacedReason));
+}
+
+bool WaitUntilExplorerFileState(
+    ExplorerStepOutcome& outcome,
+    const std::wstring& waitSite,
+    const std::wstring& waitReason,
+    int waitBudgetMs,
+    int waitReplacedFromSleepMs,
+    const std::wstring& waitStatePredicate,
+    const std::function<bool()>& stateReady) {
+    CoreWaitStateResult wait = WaitForExplorerWorkflowState(
+        outcome,
+        waitSite,
+        waitReason,
+        waitBudgetMs,
+        waitReplacedFromSleepMs,
+        waitStatePredicate,
+        stateReady);
+    return wait.stateReady;
+}
 
 std::wstring ParentPath(const std::wstring& path) {
     size_t slash = path.find_last_of(L"\\/");
@@ -536,6 +634,8 @@ POINT ElementCenterClient(HWND hwnd, const UiaElementInfo& element) {
     return pt;
 }
 
+bool VerifyExplorerFocusedItem(const WindowInfo& explorer, const std::wstring& fileName);
+
 bool SelectExplorerItem(const WindowInfo& explorer, const std::wstring& fileName, UiaElementInfo& item, ExplorerStepOutcome& outcome) {
     std::wstring lastCode;
     std::wstring lastMessage;
@@ -549,19 +649,39 @@ bool SelectExplorerItem(const WindowInfo& explorer, const std::wstring& fileName
                 outcome.errorMessage = click.error;
                 return false;
             }
-            Sleep(150);
+            WaitForExplorerWorkflowState(
+                outcome,
+                L"ExplorerWorkflowExecutor.SelectExplorerItem.selection_changed",
+                L"explorer_selection_changed",
+                150,
+                150,
+                L"WaitUntilSelectionChanged",
+                [&]() { return VerifyExplorerFocusedItem(explorer, fileName); });
             return true;
         }
         lastCode = outcome.errorCode;
         lastMessage = outcome.errorMessage;
         if (outcome.errorCode == L"STOP_TARGET_NOT_UNIQUE") return false;
+        std::vector<std::wstring> beforeScrollItems = VisibleExplorerItemNames(explorer.hwnd);
         RECT client = {};
         GetClientRect(explorer.hwnd, &client);
         int x = (client.right - client.left) / 2;
         int y = (client.bottom - client.top) / 2;
         int delta = attempt < 5 ? -360 : 360;
         ScrollClientPoint(explorer.hwnd, x, y, delta, L"human");
-        Sleep(180);
+        WaitForExplorerWorkflowState(
+            outcome,
+            L"ExplorerWorkflowExecutor.SelectExplorerItem.directory_refresh_after_scroll",
+            L"explorer_directory_refresh_after_scroll",
+            180,
+            180,
+            L"WaitUntilDirectoryStable",
+            [&]() {
+                std::vector<std::wstring> afterScrollItems = VisibleExplorerItemNames(explorer.hwnd);
+                return !SameStringVector(beforeScrollItems, afterScrollItems) ||
+                    FirstOrEmpty(beforeScrollItems) != FirstOrEmpty(afterScrollItems) ||
+                    LastOrEmpty(beforeScrollItems) != LastOrEmpty(afterScrollItems);
+            });
     }
     outcome.errorCode = lastCode.empty() ? L"FAIL_TARGET_NOT_FOUND" : lastCode;
     outcome.errorMessage = lastMessage.empty() ? L"Explorer target item was not found by UIA." : lastMessage;
@@ -588,7 +708,14 @@ bool KeyboardSelectExplorerItem(const WindowInfo& explorer, const std::wstring& 
         return false;
     }
     PressKey(explorer.hwnd, L"HOME");
-    Sleep(100);
+    WaitForExplorerWorkflowState(
+        outcome,
+        L"ExplorerWorkflowExecutor.KeyboardSelectExplorerItem.home_focus_stable",
+        L"explorer_home_focus_stable",
+        100,
+        100,
+        L"WaitUntilExplorerFrameStable",
+        [&]() { return GetForegroundWindow() == explorer.hwnd; });
     std::wstring query = FileStem(fileName);
     if (query.empty()) query = fileName;
     TypeResult typed = TypeText(explorer.hwnd, query, L"human", -1);
@@ -597,7 +724,14 @@ bool KeyboardSelectExplorerItem(const WindowInfo& explorer, const std::wstring& 
         outcome.errorMessage = typed.error;
         return false;
     }
-    Sleep(250);
+    WaitForExplorerWorkflowState(
+        outcome,
+        L"ExplorerWorkflowExecutor.KeyboardSelectExplorerItem.selection_after_type",
+        L"explorer_keyboard_selection_ready",
+        250,
+        250,
+        L"WaitUntilSelectionChanged",
+        [&]() { return VerifyExplorerFocusedItem(explorer, fileName); });
     ExpectedContextSpec ctx;
     ctx.enabled = true;
     ctx.expectedProcessPattern = L"explorer.exe";
@@ -631,7 +765,7 @@ bool OpenExplorerWithSelectedFile(const ExplorerWorkflowSpec& spec, const std::w
         outcome.errorMessage = launchError;
         return false;
     }
-    if (!FindExplorerWindowForFolder(ParentPath(filePath), explorer)) {
+    if (!FindExplorerWindowForFolder(ParentPath(filePath), explorer, &outcome.workflowWaits)) {
         outcome.errorCode = L"WINDOW_NOT_VISIBLE";
         outcome.errorMessage = L"Explorer window for selected file was not visible.";
         return false;
@@ -642,9 +776,20 @@ bool OpenExplorerWithSelectedFile(const ExplorerWorkflowSpec& spec, const std::w
         outcome.errorMessage = focus.error;
         return false;
     }
-    Sleep(400);
     ExpectedContextSpec ctx = ExpectedContextFromSpec(spec);
     ctx.expectedFocusMarker = FileStem(BaseName(filePath));
+    WaitForExplorerWorkflowState(
+        outcome,
+        L"ExplorerWorkflowExecutor.OpenExplorerWithSelectedFile.focus_marker_ready",
+        L"explorer_selected_file_focus_marker_ready",
+        400,
+        400,
+        L"WaitUntilSelectionChanged",
+        [&]() {
+            RuntimeTargetContext waitTargetContext;
+            RuntimeContextGuardResult waitGuard = EvaluateRuntimeContextGuard(ctx, waitTargetContext);
+            return waitGuard.ok;
+        });
     RuntimeTargetContext targetContext;
     RuntimeContextGuardResult guard = EvaluateRuntimeContextGuard(ctx, targetContext);
     if (!guard.ok) {
@@ -665,6 +810,12 @@ bool OpenAndGuardFolder(const ExplorerWorkflowSpec& spec, const std::wstring& fo
     }
     if (outcome.wrongFolderDetected && RecoveryAllowed(spec)) {
         PressKeyGlobal(L"ESC");
+        RecordExplorerWorkflowWaitNotReplaced(
+            outcome,
+            L"ExplorerWorkflowExecutor.OpenAndGuardFolder.dismiss_wrong_context",
+            L"explorer_wrong_context_escape_settle",
+            250,
+            L"modal dismissal after wrong Explorer context has no reliable generic ready signal");
         Sleep(250);
     }
     if (!ExplorerWorkflowPathWithinRoot(folder, spec.allowedRoot)) {
@@ -683,7 +834,7 @@ bool OpenAndGuardFolder(const ExplorerWorkflowSpec& spec, const std::wstring& fo
         outcome.errorMessage = launchError;
         return false;
     }
-    if (!FindExplorerWindowForFolder(folder, explorer)) {
+    if (!FindExplorerWindowForFolder(folder, explorer, &outcome.workflowWaits)) {
         outcome.errorCode = L"WINDOW_NOT_VISIBLE";
         outcome.errorMessage = L"Explorer window for expected folder was not visible.";
         return false;
@@ -694,7 +845,6 @@ bool OpenAndGuardFolder(const ExplorerWorkflowSpec& spec, const std::wstring& fo
         outcome.errorMessage = focus.error;
         return false;
     }
-    Sleep(300);
     SessionManager manager;
     SessionManagerResult session = manager.CreateSession(explorer.title, L"explorer.exe", reinterpret_cast<unsigned long long>(explorer.hwnd));
     if (!session.ok) {
@@ -706,6 +856,18 @@ bool OpenAndGuardFolder(const ExplorerWorkflowSpec& spec, const std::wstring& fo
     outcome.sessionId = session.session.sessionId;
 
     ExpectedContextSpec ctx = ExpectedContextFromSpec(spec);
+    WaitForExplorerWorkflowState(
+        outcome,
+        L"ExplorerWorkflowExecutor.OpenAndGuardFolder.context_ready",
+        L"explorer_directory_stable_and_context_ready",
+        300,
+        300,
+        L"WaitUntilDirectoryStable",
+        [&]() {
+            RuntimeTargetContext waitTargetContext;
+            RuntimeContextGuardResult waitGuard = EvaluateRuntimeContextGuard(ctx, waitTargetContext);
+            return waitGuard.ok;
+        });
     RuntimeTargetContext targetContext;
     RuntimeContextGuardResult guard = EvaluateRuntimeContextGuard(ctx, targetContext);
     outcome.runtimeContextGuardUsed = true;
@@ -750,6 +912,12 @@ ExplorerStepOutcome ExecuteOpenFileWorkflow(const ExplorerWorkflowSpec& spec) {
         outcome.errorMessage = dbl.error;
         return outcome;
     }
+    RecordExplorerWorkflowWaitNotReplaced(
+        outcome,
+        L"ExplorerWorkflowExecutor.ExecuteOpenFileWorkflow.post_double_click_open",
+        L"explorer_file_open_target_app_ready",
+        700,
+        L"target application readiness after opening arbitrary file type is not reliably observable from Explorer");
     Sleep(700);
     outcome.fileOpenVerified = ExplorerWorkflowFileExists(spec.sourcePath);
     outcome.ok = outcome.fileOpenVerified;
@@ -782,13 +950,26 @@ ExplorerStepOutcome ExecuteRenameWorkflow(const ExplorerWorkflowSpec& spec) {
         }
     }
     FocusTargetWindow(explorer.hwnd);
-    Sleep(100);
+    WaitForExplorerWorkflowState(
+        outcome,
+        L"ExplorerWorkflowExecutor.ExecuteRenameWorkflow.focus_before_f2",
+        L"explorer_focus_stable_before_rename",
+        100,
+        100,
+        L"WaitUntilExplorerFrameStable",
+        [&]() { return GetForegroundWindow() == explorer.hwnd; });
     ActionResult f2 = PressKeyGlobal(L"F2");
     if (!f2.ok) {
         outcome.errorCode = f2.errorCode.empty() ? L"SEND_INPUT_FAILED" : f2.errorCode;
         outcome.errorMessage = f2.error;
         return outcome;
     }
+    RecordExplorerWorkflowWaitNotReplaced(
+        outcome,
+        L"ExplorerWorkflowExecutor.ExecuteRenameWorkflow.rename_edit_field_ready",
+        L"explorer_rename_edit_state_ready",
+        200,
+        L"Explorer inline rename edit state has no stable UIA signal across view modes");
     Sleep(200);
     TypeResult typed = TypeTextGlobal(ExplorerRenameInputText(source, target), L"human", -1);
     if (!typed.ok) {
@@ -802,7 +983,16 @@ ExplorerStepOutcome ExecuteRenameWorkflow(const ExplorerWorkflowSpec& spec) {
         outcome.errorMessage = enter.error;
         return outcome;
     }
-    Sleep(800);
+    WaitUntilExplorerFileState(
+        outcome,
+        L"ExplorerWorkflowExecutor.ExecuteRenameWorkflow.rename_committed",
+        L"explorer_file_renamed",
+        800,
+        800,
+        L"WaitUntilFileRenamed",
+        [&]() {
+            return ExplorerWorkflowFileExists(target) && !ExplorerWorkflowFileExists(source);
+        });
     outcome.newNameExistsAfter = ExplorerWorkflowFileExists(target);
     outcome.oldNameAbsentAfter = !ExplorerWorkflowFileExists(source);
     outcome.resultVerified = outcome.newNameExistsAfter && outcome.oldNameAbsentAfter;
@@ -861,7 +1051,16 @@ ExplorerStepOutcome ExecuteMoveWorkflow(const ExplorerWorkflowSpec& spec) {
                 outcome.moveFailureStage = L"paste_failed";
                 return outcome;
             }
-            Sleep(1200);
+            WaitUntilExplorerFileState(
+                outcome,
+                L"ExplorerWorkflowExecutor.ExecuteMoveWorkflow.drag_move_committed",
+                L"explorer_drag_move_file_operation_ready",
+                1200,
+                1200,
+                L"WaitUntilFileAppearsAndSourceDisappears",
+                [&]() {
+                    return !ExplorerWorkflowFileExists(source) && ExplorerWorkflowFileExists(dest);
+                });
             outcome.sourceAbsentAfter = !ExplorerWorkflowFileExists(source);
             outcome.destinationExistsAfter = ExplorerWorkflowFileExists(dest);
             outcome.moveResultVerified = outcome.sourceAbsentAfter && outcome.destinationExistsAfter;
@@ -901,7 +1100,14 @@ ExplorerStepOutcome ExecuteMoveWorkflow(const ExplorerWorkflowSpec& spec) {
     if (cutMenu.ok) {
         outcome.cutMethod = L"context_menu_cut";
         outcome.moveActionExecuted = true;
-        Sleep(250);
+        WaitUntilExplorerFileState(
+            outcome,
+            L"ExplorerWorkflowExecutor.ExecuteMoveWorkflow.context_menu_cut_clipboard_ready",
+            L"explorer_context_menu_cut_clipboard_ready",
+            250,
+            250,
+            L"WaitUntilClipboardHasFileDropPath",
+            [&]() { return ClipboardHasFileDropPath(source); });
         outcome.cutEffectVerified = false;
     }
     if (!cutMenu.ok || !outcome.cutEffectVerified) {
@@ -914,7 +1120,14 @@ ExplorerStepOutcome ExecuteMoveWorkflow(const ExplorerWorkflowSpec& spec) {
             outcome.moveFailureStage = L"cut_failed";
             return outcome;
         }
-        Sleep(100);
+        WaitForExplorerWorkflowState(
+            outcome,
+            L"ExplorerWorkflowExecutor.ExecuteMoveWorkflow.focus_before_ctrl_x",
+            L"explorer_focus_stable_before_cut",
+            100,
+            100,
+            L"WaitUntilExplorerFrameStable",
+            [&]() { return GetForegroundWindow() == explorer.hwnd; });
         ActionResult cut = SendHotkey(explorer.hwnd, L"CTRL+X");
         if (!cut.ok) {
             outcome.errorCode = cut.errorCode.empty() ? L"SEND_INPUT_FAILED" : cut.errorCode;
@@ -924,7 +1137,14 @@ ExplorerStepOutcome ExecuteMoveWorkflow(const ExplorerWorkflowSpec& spec) {
         }
         outcome.cutSent = true;
         outcome.cutMethod = L"keyboard_ctrl_x";
-        Sleep(250);
+        WaitUntilExplorerFileState(
+            outcome,
+            L"ExplorerWorkflowExecutor.ExecuteMoveWorkflow.keyboard_cut_clipboard_ready",
+            L"explorer_keyboard_cut_clipboard_ready",
+            250,
+            250,
+            L"WaitUntilClipboardHasFileDropPath",
+            [&]() { return ClipboardHasFileDropPath(source); });
         outcome.cutEffectVerified = ClipboardHasFileDropPath(source);
         outcome.moveActionExecuted = true;
     }
@@ -934,7 +1154,14 @@ ExplorerStepOutcome ExecuteMoveWorkflow(const ExplorerWorkflowSpec& spec) {
         outcome.moveFailureStage = L"cut_failed";
         return outcome;
     }
-    Sleep(250);
+    WaitForExplorerWorkflowState(
+        outcome,
+        L"ExplorerWorkflowExecutor.ExecuteMoveWorkflow.clipboard_settled_before_destination",
+        L"explorer_clipboard_cut_stable_before_destination",
+        250,
+        250,
+        L"WaitUntilClipboardHasFileDropPath",
+        [&]() { return ClipboardHasFileDropPath(source); });
     ExplorerWorkflowSpec destinationSpec = spec;
     std::wstring destinationFolderName = BaseName(ParentPath(dest));
     destinationSpec.expectedContextJson = L"{\"expected_process_pattern\":\"explorer.exe\",\"expected_title_pattern\":"
@@ -949,13 +1176,23 @@ ExplorerStepOutcome ExecuteMoveWorkflow(const ExplorerWorkflowSpec& spec) {
             POINT folderPt = ElementCenterClient(explorer.hwnd, destinationFolderItem);
             ClickResult openDestination = DoubleClickClientPoint(explorer.hwnd, folderPt.x, folderPt.y, L"human", 0);
             if (openDestination.ok) {
-                Sleep(700);
                 WindowInfo destinationExplorer;
-                if (FindExplorerWindowForFolder(ParentPath(dest), destinationExplorer)) {
+                if (FindExplorerWindowForFolder(ParentPath(dest), destinationExplorer, &outcome.workflowWaits)) {
                     explorer = destinationExplorer;
                     FocusTargetWindow(explorer.hwnd);
-                    Sleep(250);
                     ExpectedContextSpec ctx = ExpectedContextFromSpec(destinationSpec);
+                    WaitForExplorerWorkflowState(
+                        outcome,
+                        L"ExplorerWorkflowExecutor.ExecuteMoveWorkflow.destination_context_ready",
+                        L"explorer_destination_context_ready",
+                        250,
+                        250,
+                        L"WaitUntilDirectoryStable",
+                        [&]() {
+                            RuntimeTargetContext waitTargetContext;
+                            RuntimeContextGuardResult waitGuard = EvaluateRuntimeContextGuard(ctx, waitTargetContext);
+                            return waitGuard.ok;
+                        });
                     RuntimeTargetContext targetContext;
                     RuntimeContextGuardResult guard = EvaluateRuntimeContextGuard(ctx, targetContext);
                     outcome.runtimeContextGuardUsed = true;
@@ -987,7 +1224,14 @@ ExplorerStepOutcome ExecuteMoveWorkflow(const ExplorerWorkflowSpec& spec) {
         outcome.moveFailureStage = L"destination_focus_failed";
         return outcome;
     }
-    Sleep(150);
+    WaitForExplorerWorkflowState(
+        outcome,
+        L"ExplorerWorkflowExecutor.ExecuteMoveWorkflow.destination_focus_settled",
+        L"explorer_destination_focus_stable",
+        150,
+        150,
+        L"WaitUntilExplorerFrameStable",
+        [&]() { return GetForegroundWindow() == explorer.hwnd; });
     outcome.pasteAttempted = true;
     RECT client = {};
     GetClientRect(explorer.hwnd, &client);
@@ -1005,6 +1249,12 @@ ExplorerStepOutcome ExecuteMoveWorkflow(const ExplorerWorkflowSpec& spec) {
             outcome.fallbackReason = L"explorer_context_menu_unavailable";
         }
         PressKeyGlobal(L"ESC");
+        RecordExplorerWorkflowWaitNotReplaced(
+            outcome,
+            L"ExplorerWorkflowExecutor.ExecuteMoveWorkflow.dismiss_failed_paste_menu",
+            L"explorer_paste_menu_escape_settle",
+            150,
+            L"context menu dismissal does not expose a reliable generic Explorer ready signal");
         Sleep(150);
         ActionResult refocusDestination = FocusTargetWindow(explorer.hwnd);
         if (!refocusDestination.ok) {
@@ -1013,7 +1263,14 @@ ExplorerStepOutcome ExecuteMoveWorkflow(const ExplorerWorkflowSpec& spec) {
             outcome.moveFailureStage = L"destination_focus_failed";
             return outcome;
         }
-        Sleep(100);
+        WaitForExplorerWorkflowState(
+            outcome,
+            L"ExplorerWorkflowExecutor.ExecuteMoveWorkflow.refocus_destination",
+            L"explorer_destination_refocus_ready",
+            100,
+            100,
+            L"WaitUntilExplorerFrameStable",
+            [&]() { return GetForegroundWindow() == explorer.hwnd; });
         ClickResult focusList = ClickClientPoint(explorer.hwnd, pasteX, pasteY, L"human", 0);
         if (!focusList.ok) {
             outcome.errorCode = focusList.errorCode.empty() ? L"WINDOW_FOCUS_FAILED" : focusList.errorCode;
@@ -1021,7 +1278,14 @@ ExplorerStepOutcome ExecuteMoveWorkflow(const ExplorerWorkflowSpec& spec) {
             outcome.moveFailureStage = L"destination_focus_failed";
             return outcome;
         }
-        Sleep(100);
+        WaitForExplorerWorkflowState(
+            outcome,
+            L"ExplorerWorkflowExecutor.ExecuteMoveWorkflow.focus_list_for_paste",
+            L"explorer_destination_list_focus_ready",
+            100,
+            100,
+            L"WaitUntilExplorerFrameStable",
+            [&]() { return GetForegroundWindow() == explorer.hwnd; });
         ActionResult paste = SendHotkey(explorer.hwnd, L"CTRL+V");
         if (!paste.ok) {
             outcome.errorCode = paste.errorCode.empty() ? L"SEND_INPUT_FAILED" : paste.errorCode;
@@ -1035,7 +1299,16 @@ ExplorerStepOutcome ExecuteMoveWorkflow(const ExplorerWorkflowSpec& spec) {
         outcome.moveActionExecuted = true;
     }
     for (int retry = 1; retry <= 5; ++retry) {
-        Sleep(400);
+        WaitUntilExplorerFileState(
+            outcome,
+            L"ExplorerWorkflowExecutor.ExecuteMoveWorkflow.move_verification_retry",
+            L"explorer_move_file_operation_ready",
+            400,
+            400,
+            L"WaitUntilFileAppearsAndSourceDisappears",
+            [&]() {
+                return !ExplorerWorkflowFileExists(source) && ExplorerWorkflowFileExists(dest);
+            });
         outcome.moveVerificationRetryCount = retry;
         outcome.sourceAbsentAfter = !ExplorerWorkflowFileExists(source);
         outcome.destinationExistsAfter = ExplorerWorkflowFileExists(dest);
@@ -1082,11 +1355,28 @@ ExplorerStepOutcome ExecuteDeleteWorkflow(const ExplorerWorkflowSpec& spec) {
         outcome.errorMessage = del.error;
         return outcome;
     }
-    Sleep(400);
+    WaitForExplorerWorkflowState(
+        outcome,
+        L"ExplorerWorkflowExecutor.ExecuteDeleteWorkflow.confirmation_or_delete_ready",
+        L"explorer_delete_confirmation_or_file_absent",
+        400,
+        400,
+        L"WaitUntilDeleteConfirmationOrFileAbsent",
+        [&]() {
+            HWND fg = GetForegroundWindow();
+            return !ExplorerWorkflowFileExists(source) || (fg && fg != explorer.hwnd);
+        });
     HWND fg = GetForegroundWindow();
     if (fg && fg != explorer.hwnd) {
         PressKey(fg, L"ENTER");
-        Sleep(500);
+        WaitUntilExplorerFileState(
+            outcome,
+            L"ExplorerWorkflowExecutor.ExecuteDeleteWorkflow.delete_committed",
+            L"explorer_file_disappeared_after_delete_confirmation",
+            500,
+            500,
+            L"WaitUntilFileDisappears",
+            [&]() { return !ExplorerWorkflowFileExists(source); });
     }
     outcome.deleteWithConfirmationExecuted = true;
     outcome.targetAbsentAfter = !ExplorerWorkflowFileExists(source);
@@ -1127,7 +1417,14 @@ ExplorerStepOutcome ExecuteScrollLocateWorkflow(const ExplorerWorkflowSpec& spec
     }
     ActionResult home = PressKey(explorer.hwnd, L"HOME");
     outcome.homeResetUsed = home.ok;
-    Sleep(350);
+    WaitForExplorerWorkflowState(
+        outcome,
+        L"ExplorerWorkflowExecutor.ExecuteScrollLocateWorkflow.home_directory_ready",
+        L"explorer_directory_ready_after_home",
+        350,
+        350,
+        L"WaitUntilDirectoryStable",
+        [&]() { return !VisibleExplorerItemNames(explorer.hwnd).empty(); });
     outcome.visibleItemsBefore = VisibleExplorerItemNames(explorer.hwnd);
     std::vector<std::wstring> currentVisible = outcome.visibleItemsBefore;
     std::wstring iterations = L"[";
@@ -1175,7 +1472,19 @@ ExplorerStepOutcome ExecuteScrollLocateWorkflow(const ExplorerWorkflowSpec& spec
             outcome.failureStage = L"scroll_input_failed";
             return outcome;
         }
-        Sleep(250);
+        WaitForExplorerWorkflowState(
+            outcome,
+            L"ExplorerWorkflowExecutor.ExecuteScrollLocateWorkflow.scroll_visible_items_changed",
+            L"explorer_visible_items_changed_after_scroll",
+            250,
+            250,
+            L"WaitUntilExplorerFrameStable",
+            [&]() {
+                std::vector<std::wstring> interim = VisibleExplorerItemNames(explorer.hwnd);
+                return !SameStringVector(before, interim) ||
+                    FirstOrEmpty(before) != FirstOrEmpty(interim) ||
+                    LastOrEmpty(before) != LastOrEmpty(interim);
+            });
         std::vector<std::wstring> after = VisibleExplorerItemNames(explorer.hwnd);
         bool progress = !SameStringVector(before, after) ||
             FirstOrEmpty(before) != FirstOrEmpty(after) ||
@@ -1185,7 +1494,19 @@ ExplorerStepOutcome ExecuteScrollLocateWorkflow(const ExplorerWorkflowSpec& spec
             outcome.pageDownFallbackUsed = true;
             ActionResult pageDown = PressKey(explorer.hwnd, L"PAGEDOWN");
             if (pageDown.ok) {
-                Sleep(250);
+                WaitForExplorerWorkflowState(
+                    outcome,
+                    L"ExplorerWorkflowExecutor.ExecuteScrollLocateWorkflow.page_down_visible_items_changed",
+                    L"explorer_visible_items_changed_after_page_down",
+                    250,
+                    250,
+                    L"WaitUntilExplorerFrameStable",
+                    [&]() {
+                        std::vector<std::wstring> interim = VisibleExplorerItemNames(explorer.hwnd);
+                        return !SameStringVector(after, interim) ||
+                            FirstOrEmpty(after) != FirstOrEmpty(interim) ||
+                            LastOrEmpty(after) != LastOrEmpty(interim);
+                    });
                 std::vector<std::wstring> pageAfter = VisibleExplorerItemNames(explorer.hwnd);
                 progress = !SameStringVector(after, pageAfter) ||
                     FirstOrEmpty(after) != FirstOrEmpty(pageAfter) ||
@@ -1247,27 +1568,64 @@ ExplorerStepOutcome ExecuteContextMenuWorkflow(const ExplorerWorkflowSpec& spec)
         outcome.errorMessage = menu.errorMessage;
         return outcome;
     }
-    Sleep(800);
+    WaitUntilExplorerFileState(
+        outcome,
+        L"ExplorerWorkflowExecutor.ExecuteContextMenuWorkflow.menu_action_committed",
+        L"explorer_context_menu_action_file_state_ready",
+        800,
+        800,
+        L"WaitUntilFileRenamed",
+        [&]() {
+            return ExplorerWorkflowFileExists(target) && !ExplorerWorkflowFileExists(source);
+        });
     outcome.newNameExistsAfter = ExplorerWorkflowFileExists(target);
     outcome.oldNameAbsentAfter = !ExplorerWorkflowFileExists(source);
     outcome.resultVerified = outcome.newNameExistsAfter && outcome.oldNameAbsentAfter;
     if (!outcome.resultVerified && (Lower(spec.contextMenuAction).empty() || Lower(spec.contextMenuAction) == L"rename")) {
         PressKeyGlobal(L"ESC");
+        RecordExplorerWorkflowWaitNotReplaced(
+            outcome,
+            L"ExplorerWorkflowExecutor.ExecuteContextMenuWorkflow.dismiss_menu_before_fallback",
+            L"explorer_context_menu_escape_settle",
+            200,
+            L"context menu dismissal does not expose a reliable generic Explorer ready signal");
         Sleep(200);
         FocusTargetWindow(explorer.hwnd);
-        Sleep(200);
+        WaitForExplorerWorkflowState(
+            outcome,
+            L"ExplorerWorkflowExecutor.ExecuteContextMenuWorkflow.fallback_focus_settled",
+            L"explorer_focus_stable_before_fallback_rename",
+            200,
+            200,
+            L"WaitUntilExplorerFrameStable",
+            [&]() { return GetForegroundWindow() == explorer.hwnd; });
         WindowInfo retryExplorer;
         if (OpenAndGuardFolder(spec, ParentPath(source), retryExplorer, outcome)) {
             UiaElementInfo retryItem;
             if (SelectExplorerItem(retryExplorer, BaseName(source), retryItem, outcome)) {
                 ActionResult f2 = PressKey(retryExplorer.hwnd, L"F2");
                 if (f2.ok) {
+                    RecordExplorerWorkflowWaitNotReplaced(
+                        outcome,
+                        L"ExplorerWorkflowExecutor.ExecuteContextMenuWorkflow.fallback_rename_edit_ready",
+                        L"explorer_rename_edit_state_ready",
+                        200,
+                        L"Explorer inline rename edit state has no stable UIA signal across view modes");
                     Sleep(200);
                     TypeResult typed = TypeText(retryExplorer.hwnd, ExplorerRenameInputText(source, target), L"human", -1);
                     if (typed.ok) {
                         ActionResult enter = PressKey(retryExplorer.hwnd, L"ENTER");
                         if (enter.ok) {
-                            Sleep(800);
+                            WaitUntilExplorerFileState(
+                                outcome,
+                                L"ExplorerWorkflowExecutor.ExecuteContextMenuWorkflow.fallback_rename_committed",
+                                L"explorer_file_renamed_after_fallback",
+                                800,
+                                800,
+                                L"WaitUntilFileRenamed",
+                                [&]() {
+                                    return ExplorerWorkflowFileExists(target) && !ExplorerWorkflowFileExists(source);
+                                });
                             outcome.newNameExistsAfter = ExplorerWorkflowFileExists(target);
                             outcome.oldNameAbsentAfter = !ExplorerWorkflowFileExists(source);
                             outcome.resultVerified = outcome.newNameExistsAfter && outcome.oldNameAbsentAfter;
@@ -1347,6 +1705,7 @@ ExplorerWorkflowExecutionResult RunExplorerWorkflowSpecFile(
     std::wstring finalStatus = dryRun ? L"DRY_RUN_PASS" : outcome.finalStatus;
     std::wstring errorCode = dryRun ? L"" : outcome.errorCode;
     std::wstring errorMessage = dryRun ? L"" : outcome.errorMessage;
+    outcome.workflowWaitSummary = BuildWorkflowWaitStateSummary(outcome.workflowWaits);
     std::wstring resultJson = L"{\"schema_version\":\"6.7.0.explorer_workflow.result\""
         L",\"workflow_id\":" + simplejson::Quote(schema.spec.workflowId) +
         L",\"workflow_type\":" + simplejson::Quote(schema.spec.workflowType) +
@@ -1448,6 +1807,8 @@ ExplorerWorkflowExecutionResult RunExplorerWorkflowSpecFile(
         L",\"recovery_success\":" + simplejson::Bool(!dryRun && outcome.recoverySuccess) +
         L",\"wrong_folder_detected\":" + simplejson::Bool(!dryRun && outcome.wrongFolderDetected) +
         L",\"wrong_context_detected\":" + simplejson::Bool(!dryRun && outcome.wrongContextDetected) +
+        L",\"workflow_wait_summary\":" + WorkflowWaitStateSummaryJson(outcome.workflowWaitSummary) +
+        L",\"workflow_waits\":" + CoreWaitStateArrayJson(outcome.workflowWaits) +
         L",\"failure_attribution\":" + simplejson::Quote(errorCode.empty() ? L"" : L"explorer_workflow_executor") +
         L",\"powershell_file_action_used\":false"
         L",\"direct_file_api_workflow_action_used\":false"

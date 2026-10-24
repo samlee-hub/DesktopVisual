@@ -3,6 +3,7 @@
 This shared rule applies to every DesktopVisual adapter.
 
 Required loop: `observe-locate-act-verify`.
+Current launch authority: `docs\LAUNCH_CONTRACT.md`.
 
 DesktopVisual is a Windows visible-first desktop runtime, not a background script executor. The adapter's goal is not the fastest path; it must prefer visible, auditable, human-like desktop operations.
 
@@ -10,8 +11,8 @@ Default progress output is compact progress with full evidence retained in artif
 
 1. Call `version` first and confirm `project_root`.
 2. Confirm the authorized target window.
-3. Use visible-app-launch for app, URL, local shortcut, .lnk, .url, and webpage shortcut launches.
-4. App launch is desktop-first. Start Menu visible search is a fallback, not the first choice.
+3. Follow `docs\LAUNCH_CONTRACT.md` for app, URL, local shortcut, .lnk, .url, and webpage shortcut launches.
+4. App launch is desktop icon double-click first. Start Menu visible search is Layer 2 fallback only with Layer 1 failure evidence.
 5. Prefer a reviewed `task.json` and `run-task` for multi-step work.
 6. Before writing low-level task steps, check `tasks\templates` and use a matching template such as `click_button`, `fill_form`, `wait_until_text`, `wait_until_window`, `copy_text`, or `save_file`.
 7. For single custom actions, run `observe`, then `locate`, then `act`, then verify with a fresh `observe` or report expectation.
@@ -25,7 +26,9 @@ Templates are deterministic expanders. They do not bypass SafetyPolicy, Safety M
 
 No sensitive flows: adapters must not operate credential prompts, banking, payment, security-control, protected desktop, admin/elevated, anti-cheat, or privacy-sensitive workflows.
 
-Fallback discipline: Layer 1: visible UI path. Layer 2: visible keyboard fallback. Layer 3: backend fallback. Entering fallback requires two bounded visible attempts or strict surface-impossible evidence. Entering backend fallback requires visible path failure plus keyboard fallback failure. backend fallback is not the default path.
+Fallback discipline: Layer 1 is desktop icon visible mouse double-click for launch tasks, otherwise visible UI path. Layer 2 is keyboard or Start Menu fallback only with Layer 1 failure evidence. Layer 3 is backend fallback only with Layer 1 and Layer 2 failure evidence. Entering fallback requires evidence, `fallback_reason`, `fallback_evidence`, and `allowed_by_contract`. backend fallback is not the default path.
+
+Visible/action command discovery is non-executing. Do not use visible subcommand `--help` to guess syntax; use `winagent.exe help`, `COMMAND_PROTOCOL.md`, reviewed scripts, or fixed command templates. Bare visible/action `--dry-run` is invalid and non-executing.
 
 target_not_found, uia_not_found, ocr_not_found, and click_failed alone are not surface-impossible evidence. Do not disguise clipboard/backend write as visible input success.
 
@@ -37,6 +40,6 @@ v1.0.4 complex IDE work must use `RealVlmRuntimeBridge` / the real VLM bridge pa
 
 v1.0.5 capture/OCR work keeps the full-screen capture source-of-truth and requires OCR memory-frame-first. PNG evidence must be retained and saved asynchronously; flush evidence before failure or BLOCKED. Foreground/window OCR must crop from the full-screen frame, and fallback must use the same frame for full-screen OCR. OCR results must bind `frame_id` and `screenshot_id` and report cache/tile cache fields when present. VLM provider-dependent transport uses a frame-bound input image; Codex CLI currently needs file path `--image`, and old mock VLM is not a normal path.
 
-Visual Studio C++ complex IDE workflow rules for v1.0.4: launch VS only by visible desktop icon double-click; create `SingleTestProject` as an Empty Project through visible VS UI; keep the default project location/settings; add `.cpp` and `.h` files through Solution Explorer visible Add/New Item or visible `Ctrl+Shift+A`; edit code only through the visible VS editor; build and run only through VS UI or visible IDE shortcuts; verify output from visible console/output evidence; close successful boundaries by visible top-right X. Backend `.sln` open, backend project/file creation, backend file writes, `.vcxproj` edits, backend build, direct exe run, old mock VLM, and one-shot batch scripts are invalid PASS evidence.
+Visual Studio C++ complex IDE workflow rules: launch VS only by visible desktop icon double-click; Visual Studio Installer is not Visual Studio IDE; exactly one `devenv.exe` IDE main window must be verified before project creation or code input; multiple VS windows return `WINDOW_NOT_UNIQUE` or equivalent and block input. Create `SingleTestProject` as an Empty Project through visible VS UI; keep the default project location/settings; add `.cpp` and `.h` files through Solution Explorer visible Add/New Item or visible `Ctrl+Shift+A`; edit code only through the visible VS editor; build and run only through VS UI or visible IDE shortcuts; verify output from visible console/output evidence; close successful boundaries by visible top-right X. Backend `.sln` open, backend project/file creation, backend file writes, `.vcxproj` edits, backend build, direct exe run, old mock VLM, and one-shot batch scripts are invalid PASS evidence.
 
 Benchmark reference: run `benchmark_matrix.ps1` when evidence is required for repeatable capability claims.

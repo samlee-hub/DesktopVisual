@@ -1,13 +1,13 @@
 ---
 name: win-desktop-agent
-description: Use when Codex needs to run authorized Windows desktop GUI tasks through DesktopVisual v1.1.0 visible-first runtime. Open apps, URLs, .lnk, .url, webpage shortcuts, and Visual Studio IDE workflows through visible desktop-first paths; use observe / locate / act / verify or task-visible evidence chains; use memory-frame-first OCR from full-screen frame evidence; use provider-gated VLM assist on the real provider path only for frontend perception/locate failures; use compact progress with full evidence; preserve bounded fallback discipline; stop on active protection and report errors instead of guessing coordinates or using backend shortcuts.
+description: Use when Codex needs to run authorized Windows desktop GUI tasks through DesktopVisual v1.2.0 visible-first runtime. Open apps, URLs, .lnk, .url, webpage shortcuts, and Visual Studio IDE workflows through visible desktop-first paths; use observe / locate / act / verify or task-visible evidence chains; use memory-frame-first OCR from full-screen frame evidence; use provider-gated VLM assist on the real provider path only for frontend perception/locate failures; use compact progress with full evidence; preserve bounded fallback discipline; stop on active protection and report errors instead of guessing coordinates or using backend shortcuts.
 ---
 
-# Win Desktop Agent - DesktopVisual v1.1.0 Skill Contract
+# Win Desktop Agent - DesktopVisual v1.2.0 Skill Contract
 
 DesktopVisual is a Windows visible-first desktop runtime, not a background script executor. It gives agents a controlled, auditable workflow for authorized Windows desktop tasks through CLI, Skill scripts, explicit local service mode, task templates, reports, Safety Manifest checks, and local visible input primitives.
 
-Project root resolution: pass `-Root`, set `DESKTOPVISUAL_ROOT`, or keep DesktopVisual at the legacy `D:\desktopvisual` fallback.
+Project root resolution: pass `-Root`, set `DESKTOPVISUAL_ROOT`, or keep DesktopVisual at the current local-use `D:\desktop_release` fallback.
 
 ## Entry Contract
 

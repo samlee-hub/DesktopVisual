@@ -1,18 +1,138 @@
-# Local runtime residue
+# Generated runtime output
+.desktopvisual_local/
 artifacts/
-
-# Build/cache residue
+!artifacts/
+artifacts/*
+artifacts/release_sync_*/
+artifacts/motion_profile/**/raw/
+runtime_sessions/
+downloads/
+artifacts/**/raw/
+artifacts/**/tmp/
+artifacts/**/temp/
+artifacts/**/screenshots/
+artifacts/**/debug/
+artifacts/**/runtime_sessions/
+artifacts/**/downloads/
+artifacts/**/dumps/
+artifacts/**/*_raw.png
+artifacts/**/*_debug.png
+artifacts/**/*.bmp
+artifacts/**/*.bmp.png
+artifacts/**/ocr_window_*.bmp
+artifacts/**/observe_*.bmp
+bin/
+obj/
+dist/
+runs/
+temp/
+tmp/
+logs/
+*.zip
+*.7z
+*.rar
+*.mp4
+*.tar
+*.gz
 *.tmp
-*.temp
+*.bak
 *.log.tmp
-__pycache__/
+
+# Build products
+*.obj
+*.pdb
+*.ilk
+*.idb
+*.pch
+*.ipch
+*.tlog
+*.lastbuildstate
+*.exe
+*.dll
+*.lib
+*.exp
+build/
+out/
+x64/
+Debug/
+Release/
+CMakeFiles/
+CMakeCache.txt
+
+# Logs, caches, screenshots, and temporary files
+*.log
+*.bmp
+*.png
+*.jpg
+*.jpeg
+*.tmp
+*.cache
 **/__pycache__/
+**pycache**/
 .pytest_cache/
+.cache/
+
+# Keep curated closure evidence trackable even with global screenshot ignores.
+!artifacts/dev1.0.0_developer_closure/
+!artifacts/dev1.0.0_developer_closure/**
+!artifacts/dev1.0.0_developer_closure/**/*.md
+!artifacts/dev1.0.0_developer_closure/**/*.json
+!artifacts/dev1.0.0_developer_closure/**/*.jsonl
+!artifacts/dev1.0.0_developer_closure/**/*.txt
+!artifacts/dev1.0.0_developer_closure/**/*.png
+!artifacts/dev1.0.1_runtime_visible_first_launch_and_fallback_discipline/
+!artifacts/dev1.0.1_runtime_visible_first_launch_and_fallback_discipline/**
+!artifacts/dev1.0.2_skill_contract_hardening/
+!artifacts/dev1.0.2_skill_contract_hardening/**
+!artifacts/dev1.0.3_automatic_real_vlm_runtime_bridge/
+!artifacts/dev1.0.3_automatic_real_vlm_runtime_bridge/**
+
+# Browser and app profiles/caches
+edge_profile/
+debug_profile/
+browser_profile/
+browser_cache/
+profile/
+BrowserMetrics/
+Cache/
+Code Cache/
+Crashpad/
+GPUCache/
+Service Worker/
+Local Storage/
+Session Storage/
+IndexedDB/
+Cookies
+History
+Login Data
+Web Data
+
+# Optional model/provider artifacts are configured locally, not committed.
+*.onnx
+*.pt
+*.pth
+*.safetensors
+models/
+model_cache/
+
+# Visual Studio local state
 .vs/
 *.user
 *.suo
 
-# OS/editor
-Thumbs.db
-Desktop.ini
-.vscode/.browse.VC.db
+# User-local operator profiles are private unless placed under samples/
+config/operator_motion_profile.json
+!samples/**/operator_motion_profile*.json
+
+# Public-source directories that should remain trackable:
+# docs/assets/
+# samples/
+# cases/
+# tasks/
+# config/
+# skill_template/
+# dogfood/
+
+# v1.1.11 lifecycle evidence is retained as version evidence.
+!artifacts/dev1.1.11_invalid_artifact_lifecycle/
+!artifacts/dev1.1.11_invalid_artifact_lifecycle/**

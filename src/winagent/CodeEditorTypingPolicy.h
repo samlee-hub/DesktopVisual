@@ -73,6 +73,15 @@ struct CodeEditorTypingResult {
     bool smartCompletionModel = false;
     bool smartCompletionAdjustmentApplied = false;
     int smartCompletionAdjustedLineCount = 0;
+    bool braceSafeDefaultEnabled = false;
+    bool braceSafePreflightEnabled = false;
+    int braceSafeOpenBraceCount = 0;
+    int braceSafeSyntheticCloseCount = 0;
+    int braceSafeBackspaceCount = 0;
+    int braceSafeDeleteCount = 0;
+    int autoPairCorruptionCount = 0;
+    bool failureTriggeredStrategySwitch = false;
+    std::wstring braceSafeStrategy = L"none";
     std::wstring language = L"unknown";
     bool postInputVerified = false;
     bool codeStructureVerified = false;
@@ -88,6 +97,7 @@ struct CodeEditorTypingResult {
     RealKeyboardCodeInputPolicyResult realKeyboardPolicy;
     TextInputVerificationResult verification;
     TypeResult typeResult;
+    std::vector<CoreWaitStateResult> coreWaits;
 };
 
 CodeEditorTypingResult ApplyCodeEditorTypingPolicy(HWND hwnd, const CodeEditorTypingOptions& options);

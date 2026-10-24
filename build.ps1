@@ -187,6 +187,7 @@ $sources = @(
     'SessionCommandDispatcher.cpp',
     'LatencyTracker.cpp',
     'LatencyProfile.cpp',
+    'CoreWaitState.cpp',
     'ForegroundPreparation.cpp',
     'ForegroundPreempt.cpp',
     'UserAbortController.cpp',

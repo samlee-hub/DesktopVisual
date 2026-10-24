@@ -1,5 +1,9 @@
 # DesktopVisual Agent Contract
 
+Current launch authority: `docs\LAUNCH_CONTRACT.md`.
+
+For app, browser, software, `.lnk`, `.url`, and desktop shortcut startup, DesktopVisual v1.1.12 requires desktop icon visible mouse double-click first, keyboard/Start Menu fallback only with Layer 1 failure evidence, and backend fallback only with Layer 1 and Layer 2 failure evidence. Visible/action `--help`, `-h`, `/?`, and bare `--dry-run` discovery forms are non-executing.
+
 This is an agent-agnostic contract for DesktopVisual CLI wrappers.
 
 Required flow: `observe-locate-act-verify`.
@@ -74,4 +78,4 @@ No unrestricted desktop control and no sensitive flows are allowed.
 
 ## Visual Studio C++ Complex IDE Workflow
 
-DesktopVisual v1.0.4 accepts the Visual Studio C++ complex IDE workflow only when the path is visible and step-checkpointed. VS launch must be visible desktop icon double-click. Project open must be visible VS UI. `SingleTestProject` must be an Empty Project using default location/settings. Source/header files must be added through visible IDE UI. Code edits, build, run, and output verification must happen through visible VS editor/UI/shortcut surfaces. Backend project creation, file writes, `.vcxproj` edits, `msbuild`, direct exe run, backend `.sln` open, and legacy mock VLM cannot support PASS.
+DesktopVisual accepts the Visual Studio C++ complex IDE workflow only when the path is visible and step-checkpointed. VS launch must be visible desktop icon double-click. Visual Studio Installer is not Visual Studio IDE. Exactly one `devenv.exe` main window must be verified before project creation or code input; multiple VS windows return `WINDOW_NOT_UNIQUE` or equivalent. Project open must be visible VS UI. `SingleTestProject` must be an Empty Project using default location/settings. Source/header files must be added through visible IDE UI. Code edits, build, run, and output verification must happen through visible VS editor/UI/shortcut surfaces. Backend project creation, file writes, `.vcxproj` edits, `msbuild`, direct exe run, backend `.sln` open, and legacy mock VLM cannot support PASS.

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "CoreWaitState.h"
+
 #include <string>
 #include <vector>
 
@@ -46,6 +48,8 @@ struct RecoveryResult {
     std::wstring resumeBlockReason;
     bool activeProtectionDetected = false;
     bool credentialRequiredDetected = false;
+    std::vector<CoreWaitStateResult> coreWaits;
+    CoreWaitStateSummary coreWaitSummary;
 };
 
 bool ParseRecoveryPolicyFromArgs(int argc, wchar_t** argv, RecoveryRequest& request, std::wstring& error);

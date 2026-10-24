@@ -8,6 +8,9 @@
 
 struct VisibleTextInputOptions {
     std::wstring text;
+    std::wstring payloadSource = L"argv";
+    std::wstring payloadPath;
+    bool payloadIntegrityVerified = true;
     std::wstring inputKind;
     std::wstring inputMethod = L"real_keyboard_events";
     std::wstring targetTitle;
@@ -53,6 +56,9 @@ struct VisibleTextInputResult {
     bool ok = false;
     std::wstring errorCode;
     std::wstring errorMessage;
+    std::wstring payloadSource = L"argv";
+    std::wstring payloadPath;
+    bool payloadIntegrityVerified = true;
     std::wstring inputMethod = L"real_keyboard_events";
     int keyboardEventCount = 0;
     int unicodeCharEventCount = 0;
@@ -104,12 +110,22 @@ struct VisibleTextInputResult {
     bool codeCollapsedToSingleLine = false;
     bool selfselfAutocompleteArtifact = false;
     bool firstPassFailed = false;
+    std::wstring fallbackLadder = L"structured_visible_keyboard>line_by_line_visible_keyboard>raw_visible_keyboard>retry_reobserve_refocus>stop_or_explicit_permission";
+    int fallbackLevel = 1;
+    std::wstring fallbackReason = L"primary_structured_visible_keyboard_typing";
+    std::wstring previousFailure = L"none";
+    bool allowedByPolicy = true;
+    std::wstring codeIntegrityCheckBefore = L"planned";
+    std::wstring codeIntegrityCheckAfter = L"verified";
     bool clipboardUsed = false;
     std::wstring clipboardFallbackReason;
     bool backendFileWriteUsed = false;
     bool targetWindowLocked = false;
     bool targetInputVerified = false;
     TargetWindowLockResult targetLock;
+    std::wstring keyboardSafeSegmentationJson = L"{}";
+    std::wstring targetLockPreflightJson = L"{}";
+    std::wstring codeInputIntegrityV2Json = L"{}";
     VisibleOperationPolicyResult operationPriority;
     StructuredTextInputResult structuredInput;
 };

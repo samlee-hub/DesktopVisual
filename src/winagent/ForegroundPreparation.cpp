@@ -1,5 +1,6 @@
 #include "ForegroundPreparation.h"
 
+#include "CoreWaitState.h"
 #include "SafetyPolicy.h"
 #include "Trace.h"
 
@@ -126,21 +127,24 @@ bool ShowAndActivate(HWND hwnd, int timeoutMs, HWND& foregroundBefore, HWND& for
     SetActiveWindow(hwnd);
     SetForegroundWindow(hwnd);
 
-    ULONGLONG start = GetTickCount64();
     int waitMs = timeoutMs <= 0 ? 1500 : timeoutMs;
-    do {
-        foregroundAfter = GetForegroundWindow();
-        if (foregroundAfter == hwnd) break;
+    CoreWaitStateOptions waitOptions;
+    waitOptions.waitSite = L"ForegroundPreparation.WaitUntilTargetWindowForeground";
+    waitOptions.waitReason = L"foreground_activation_settled";
+    waitOptions.waitBudgetMs = waitMs;
+    waitOptions.waitPollIntervalMs = 30;
+    waitOptions.waitReplacedFromSleepMs = waitMs;
+    CoreWaitStateResult wait = WaitForCoreState(waitOptions, [hwnd]() {
         BringWindowToTop(hwnd);
         SetForegroundWindow(hwnd);
-        Sleep(30);
-    } while (GetTickCount64() - start < static_cast<ULONGLONG>(waitMs));
+        return GetForegroundWindow() == hwnd;
+    });
 
     if (attachedForeground) AttachThreadInput(currentThread, foregroundThread, FALSE);
     if (attachedTarget) AttachThreadInput(currentThread, targetThread, FALSE);
 
     foregroundAfter = GetForegroundWindow();
-    return foregroundAfter == hwnd;
+    return wait.stateReady && foregroundAfter == hwnd;
 }
 
 std::wstring HwndOrNull(HWND hwnd) {
@@ -162,8 +166,12 @@ bool DetectAgentHostWindow(HWND hwnd, WindowInfo& info) {
 bool MinimizeAgentHostWindow(HWND hwnd) {
     if (!hwnd || !IsWindow(hwnd)) return false;
     ShowWindow(hwnd, SW_MINIMIZE);
-    Sleep(80);
-    return IsIconic(hwnd) || GetForegroundWindow() != hwnd;
+    CoreWaitStateResult wait = WaitForCoreState(
+        {L"ForegroundPreparation.MinimizeAgentHostWindow", L"agent_host_minimized_or_not_foreground", 80, 40, 80, true},
+        [hwnd]() {
+            return IsIconic(hwnd) || GetForegroundWindow() != hwnd;
+        });
+    return wait.stateReady || IsIconic(hwnd) || GetForegroundWindow() != hwnd;
 }
 
 bool MoveAgentHostWindowToCorner(HWND hwnd) {
@@ -183,7 +191,13 @@ bool MoveAgentHostWindowToCorner(HWND hwnd) {
     if (x < work.left) x = work.left;
     if (y < work.top) y = work.top;
     BOOL moved = SetWindowPos(hwnd, HWND_BOTTOM, x, y, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    Sleep(60);
+    WaitForCoreState(
+        {L"ForegroundPreparation.MoveAgentHostWindowToCorner", L"agent_host_window_rect_settled", 60, 30, 60, true},
+        [hwnd, x, y, width, height]() {
+            RECT rect = {};
+            if (!GetWindowRect(hwnd, &rect)) return false;
+            return rect.left == x && rect.top == y && (rect.right - rect.left) == width && (rect.bottom - rect.top) == height;
+        });
     return moved != FALSE;
 }
 
@@ -191,7 +205,11 @@ bool RestoreAgentHostWindowIfNeeded(HWND hwnd) {
     if (!hwnd || !IsWindow(hwnd)) return false;
     if (IsIconic(hwnd)) {
         ShowWindow(hwnd, SW_RESTORE);
-        Sleep(80);
+        WaitForCoreState(
+            {L"ForegroundPreparation.RestoreAgentHostWindowIfNeeded", L"agent_host_restored_visible", 80, 40, 80, true},
+            [hwnd]() {
+                return IsWindowVisible(hwnd) && !IsIconic(hwnd);
+            });
     }
     return IsWindowVisible(hwnd) != FALSE;
 }
@@ -205,6 +223,7 @@ bool ActivateWindowForeground(HWND hwnd, int timeoutMs, HWND& foregroundBefore, 
 }
 
 ForegroundPreparationResult PrepareForegroundForVisibleUiTask(HWND targetHwnd, int timeoutMs) {
+    ClearCoreWaitStateRecords();
     ULONGLONG start = GetTickCount64();
     ForegroundPreparationResult result;
     result.attempted = true;
@@ -267,6 +286,8 @@ ForegroundPreparationResult PrepareForegroundForVisibleUiTask(HWND targetHwnd, i
 
     result.backendFallbackUsed = false;
     result.durationMs = ElapsedMs(start);
+    result.coreWaits = SnapshotCoreWaitStateRecords();
+    result.coreWaitSummary = BuildCoreWaitStateSummary(result.coreWaits);
     return result;
 }
 
@@ -301,7 +322,9 @@ std::wstring ForegroundPreparationJson(const ForegroundPreparationResult& result
          << L",\"fallback_move_away_or_focus_target\":" << BoolJson(result.fallbackMoveAwayOrFocusTarget)
          << L",\"fallback\":" << JsonString(result.fallback)
          << L",\"backend_fallback_used\":" << BoolJson(result.backendFallbackUsed)
-         << L",\"duration_ms\":" << result.durationMs;
+         << L",\"duration_ms\":" << result.durationMs
+         << L",\"core_wait_summary\":" << CoreWaitStateSummaryJson(result.coreWaitSummary)
+         << L",\"core_waits\":" << CoreWaitStateArrayJson(result.coreWaits);
     if (!result.errorCode.empty()) {
         json << L",\"error\":{\"code\":" << JsonString(result.errorCode)
              << L",\"message\":" << JsonString(result.errorMessage) << L"}";

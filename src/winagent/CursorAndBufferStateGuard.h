@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CoreWaitState.h"
 #include "InputController.h"
 
 #include <windows.h>
@@ -23,6 +24,8 @@ struct CursorAndBufferStateGuardResult {
     std::wstring clearStrategy = L"reverse_full_buffer_selection_delete";
     std::vector<std::wstring> keySequence;
     int keyboardSendBatchCount = 0;
+    bool hasBufferStabilizationWait = false;
+    CoreWaitStateResult bufferStabilizationWait;
 };
 
 CursorAndBufferStateGuardResult PlanCursorAndBufferStateGuard(bool clearFirst);

@@ -30,6 +30,53 @@ bool Contains(const std::wstring& value, const std::wstring& needle) {
     return value.find(needle) != std::wstring::npos;
 }
 
+std::wstring StripCStyleNonStructuralText(const std::wstring& value, bool& inBlockComment) {
+    std::wstring out;
+    bool inString = false;
+    bool escaped = false;
+    wchar_t quote = 0;
+
+    for (size_t i = 0; i < value.size(); ++i) {
+        wchar_t ch = value[i];
+        wchar_t next = (i + 1 < value.size()) ? value[i + 1] : 0;
+
+        if (inBlockComment) {
+            if (ch == L'*' && next == L'/') {
+                inBlockComment = false;
+                ++i;
+            }
+            continue;
+        }
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch == L'\\') {
+                escaped = true;
+            } else if (ch == quote) {
+                inString = false;
+                quote = 0;
+            }
+            continue;
+        }
+        if (ch == L'/' && next == L'/') {
+            break;
+        }
+        if (ch == L'/' && next == L'*') {
+            inBlockComment = true;
+            ++i;
+            continue;
+        }
+        if (ch == L'"' || ch == L'\'') {
+            inString = true;
+            quote = ch;
+            escaped = false;
+            continue;
+        }
+        out.push_back(ch);
+    }
+    return out;
+}
+
 bool IdentifierChar(wchar_t ch) {
     return std::iswalnum(ch) || ch == L'_';
 }
@@ -94,6 +141,13 @@ bool LooksLikeClassDeclaration(const std::wstring& trimmed) {
            StartsWith(lower, L"struct ") || StartsWith(lower, L"interface ");
 }
 
+bool LooksLikeLambdaExpression(const std::wstring& trimmed) {
+    return Contains(trimmed, L"[](") ||
+           Contains(trimmed, L"[] (") ||
+           Contains(trimmed, L"](") ||
+           Contains(trimmed, L"] (");
+}
+
 bool LooksLikeFunctionDeclaration(const std::wstring& trimmed, const std::wstring& language) {
     std::wstring lower = ToLower(trimmed);
     if (language == L"python") return StartsWith(lower, L"def ");
@@ -103,6 +157,7 @@ bool LooksLikeFunctionDeclaration(const std::wstring& trimmed, const std::wstrin
         return false;
     }
     if (LooksLikeClassDeclaration(trimmed)) return false;
+    if (LooksLikeLambdaExpression(trimmed)) return false;
     return Contains(trimmed, L"(") && Contains(trimmed, L")") && Contains(trimmed, L"{");
 }
 
@@ -187,8 +242,10 @@ void BuildPythonPlan(CodeWritePlanResult& result) {
 }
 
 void BuildCStylePlan(CodeWritePlanResult& result) {
+    bool inBlockComment = false;
     for (const auto& line : result.lines) {
-        std::wstring trimmed = Trim(line.contentWithoutIndent);
+        std::wstring structuralContent = StripCStyleNonStructuralText(line.contentWithoutIndent, inBlockComment);
+        std::wstring trimmed = Trim(structuralContent);
         if (trimmed.empty()) continue;
 
         if (LooksLikeIncludeOrImport(trimmed)) {

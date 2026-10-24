@@ -1,5 +1,6 @@
 #include "SafeContextRecovery.h"
 
+#include "CoreWaitState.h"
 #include "InputController.h"
 #include "ProjectRoot.h"
 #include "SafetyPolicy.h"
@@ -255,7 +256,24 @@ bool ActivateBrowserWindow(WindowInfo& selected) {
         if (ProcessIsBrowser(ProcessNameForPid(window.pid))) {
             selected = window;
             SetForegroundWindow(window.hwnd);
-            Sleep(200);
+            WaitUntilTargetWindowForeground(
+                window.hwnd,
+                200,
+                L"SafeContextRecovery.ActivateBrowserWindow",
+                L"browser_foreground_after_activation",
+                200);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool FindAndActivateBrowserWindow(WindowInfo& selected) {
+    std::vector<WindowInfo> windows = EnumerateVisibleTopLevelWindows();
+    for (const auto& window : windows) {
+        if (ProcessIsBrowser(ProcessNameForPid(window.pid))) {
+            selected = window;
+            SetForegroundWindow(window.hwnd);
             return true;
         }
     }
@@ -263,20 +281,45 @@ bool ActivateBrowserWindow(WindowInfo& selected) {
 }
 
 bool WaitForBrowserWindow(int waitMs, WindowInfo& selected) {
-    ULONGLONG deadline = GetTickCount64() + static_cast<ULONGLONG>(waitMs);
-    do {
-        if (ActivateBrowserWindow(selected)) return true;
-        Sleep(150);
-    } while (GetTickCount64() < deadline);
-    return ActivateBrowserWindow(selected);
+    CoreWaitStateOptions options;
+    options.waitSite = L"SafeContextRecovery.WaitUntilWindowStillValid";
+    options.waitReason = L"browser_window_available_for_safe_recovery";
+    options.waitBudgetMs = waitMs;
+    options.waitPollIntervalMs = 50;
+    options.waitReplacedFromSleepMs = 150;
+    CoreWaitStateResult wait = WaitForCoreState(options, [&selected]() {
+        return FindAndActivateBrowserWindow(selected);
+    });
+    if (wait.stateReady) {
+        WaitUntilTargetWindowForeground(
+            selected.hwnd,
+            200,
+            L"SafeContextRecovery.WaitUntilFrameOrFocusStable",
+            L"browser_window_foreground_after_wait",
+            0);
+        return true;
+    }
+    return FindAndActivateBrowserWindow(selected);
 }
 
 bool OpenRunDialogAndType(const std::wstring& commandLine) {
     ActionResult run = SendHotkeyGlobal(L"WIN+R");
     if (!run.ok) return false;
+    RecordCoreWaitNotReplaced(
+        L"SafeContextRecovery.OpenRunDialogAndType",
+        L"run_dialog_transition_after_hotkey",
+        250,
+        L"no reliable locale-neutral Run dialog readiness state");
+    // CORE_WAIT_NOT_REPLACED: no reliable locale-neutral Run dialog readiness state.
     Sleep(250);
     TypeResult typed = TypeTextGlobal(commandLine, L"human", -1);
     if (!typed.ok) return false;
+    RecordCoreWaitNotReplaced(
+        L"SafeContextRecovery.OpenRunDialogAndType",
+        L"run_dialog_text_commit_before_enter",
+        100,
+        L"global Run dialog text commit has no reliable readback state");
+    // CORE_WAIT_NOT_REPLACED: global Run dialog text commit has no reliable readback state.
     Sleep(100);
     ActionResult enter = PressKeyGlobal(L"ENTER");
     return enter.ok;
@@ -289,15 +332,38 @@ bool ExecuteBrowserOpenUrlHuman(const std::wstring& url) {
         if (!WaitForBrowserWindow(8000, browser)) return false;
     }
     SetForegroundWindow(browser.hwnd);
-    Sleep(150);
+    WaitUntilFocusStable(
+        browser.hwnd,
+        150,
+        L"SafeContextRecovery.WaitUntilFrameOrFocusStable",
+        L"browser_focus_stable_before_address_bar",
+        150);
     ActionResult focus = SendHotkeyGlobal(L"CTRL+L");
     if (!focus.ok) return false;
+    RecordCoreWaitNotReplaced(
+        L"SafeContextRecovery.ExecuteBrowserOpenUrlHuman",
+        L"address_bar_focus_transition",
+        80,
+        L"address bar focus state is not exposed reliably across browsers");
+    // CORE_WAIT_NOT_REPLACED: address bar focus state is not exposed reliably across browsers.
     Sleep(80);
     ActionResult selectAll = SendHotkeyGlobal(L"CTRL+A");
     if (!selectAll.ok) return false;
+    RecordCoreWaitNotReplaced(
+        L"SafeContextRecovery.ExecuteBrowserOpenUrlHuman",
+        L"address_bar_selection_transition",
+        80,
+        L"address bar selection state is not exposed reliably across browsers");
+    // CORE_WAIT_NOT_REPLACED: address bar selection state is not exposed reliably across browsers.
     Sleep(80);
     TypeResult typed = TypeTextGlobal(url, L"human", -1);
     if (!typed.ok) return false;
+    RecordCoreWaitNotReplaced(
+        L"SafeContextRecovery.ExecuteBrowserOpenUrlHuman",
+        L"address_bar_text_commit_before_enter",
+        80,
+        L"browser address bar typed text commit has no reliable cross-browser readback state");
+    // CORE_WAIT_NOT_REPLACED: browser address bar typed text commit has no reliable cross-browser readback state.
     Sleep(80);
     ActionResult enter = PressKeyGlobal(L"ENTER");
     return enter.ok;
@@ -369,8 +435,14 @@ bool ParseRecoveryPolicyFromArgs(int argc, wchar_t** argv, RecoveryRequest& requ
 }
 
 RecoveryResult EvaluateSafeContextRecovery(const RecoveryRequest& request) {
+    ClearCoreWaitStateRecords();
     RecoveryResult result;
     result.recoveryAttemptCount = request.recoveryAttemptCount;
+    auto FinalizeResult = [&result]() {
+        result.coreWaits = SnapshotCoreWaitStateRecords();
+        result.coreWaitSummary = BuildCoreWaitStateSummary(result.coreWaits);
+        return result;
+    };
     std::wstring context = request.currentContextText;
     WindowInfo beforeActive;
     if (context.empty()) {
@@ -382,31 +454,31 @@ RecoveryResult EvaluateSafeContextRecovery(const RecoveryRequest& request) {
 
     if (!request.policy.recoveryEnabled) {
         Stop(result, L"RECOVERY_NOT_ALLOWED", L"Recovery policy disabled recovery.");
-        return result;
+        return FinalizeResult();
     }
     if (request.policy.stopIfActiveProtection && result.activeProtectionDetected) {
         Stop(result, L"STOP_ACTIVE_PROTECTION_OR_LOGIN_BLOCK", L"Active protection signal detected; recovery and continuation are refused.");
-        return result;
+        return FinalizeResult();
     }
     if (request.policy.stopIfCredentialRequired && result.credentialRequiredDetected) {
         Stop(result, L"STOP_CREDENTIAL_REQUIRED", L"Credential or verification-code handoff detected; recovery and continuation are refused.");
-        return result;
+        return FinalizeResult();
     }
     if (request.policy.checkpointRequired && !request.checkpointAvailable) {
         result.resumeAllowed = false;
         result.resumeBlockReason = L"Checkpoint is required but not available.";
         Stop(result, L"RECOVERY_NOT_ALLOWED", result.resumeBlockReason);
-        return result;
+        return FinalizeResult();
     }
     if (request.recoveryAttemptCount >= request.policy.maxRecoveryAttempts) {
         Stop(result, L"RECOVERY_NOT_ALLOWED", L"Max recovery attempts reached.");
-        return result;
+        return FinalizeResult();
     }
 
     std::wstring allowReason;
     if (!TargetAllowedByPolicy(request.policy, allowReason)) {
         Stop(result, L"RECOVERY_NOT_ALLOWED", allowReason);
-        return result;
+        return FinalizeResult();
     }
 
     result.recoveryAllowed = true;
@@ -437,13 +509,42 @@ RecoveryResult EvaluateSafeContextRecovery(const RecoveryRequest& request) {
     if (!actionOk) {
         result.recoveryAttempted = true;
         Stop(result, L"RECOVERY_FAILED", L"Recovery action failed or is unsupported.");
-        return result;
+        return FinalizeResult();
     }
 
     std::wstring observed = context;
     WindowInfo recovered;
     if (request.policy.reobserveRequired && result.recoveryAttempted && !request.dryRun) {
-        Sleep(result.recoveryAttempted && !request.dryRun ? 1200 : 100);
+        CoreWaitStateOptions waitOptions;
+        waitOptions.waitSite = L"SafeContextRecovery.WaitUntilContextStable";
+        waitOptions.waitReason = L"safe_recovery_reobserve_context_stable";
+        waitOptions.waitBudgetMs = 1200;
+        waitOptions.waitPollIntervalMs = 50;
+        waitOptions.waitReplacedFromSleepMs = 1200;
+        HWND lastHwnd = nullptr;
+        std::wstring lastTitle;
+        int stableCount = 0;
+        WaitForCoreState(waitOptions, [&request, &observed, &recovered, &lastHwnd, &lastTitle, &stableCount]() {
+            WindowInfo probe;
+            std::wstring text = ActiveWindowText(probe);
+            if (!probe.hwnd || !IsWindow(probe.hwnd)) {
+                stableCount = 0;
+                return false;
+            }
+            observed = text;
+            recovered = probe;
+            if (!request.policy.recoveryExpectedMarkers.empty()) {
+                return VerifyMarkers(text, request.policy.recoveryExpectedMarkers);
+            }
+            if (probe.hwnd == lastHwnd && probe.title == lastTitle) {
+                ++stableCount;
+            } else {
+                stableCount = 1;
+                lastHwnd = probe.hwnd;
+                lastTitle = probe.title;
+            }
+            return stableCount >= 2;
+        });
         observed = ActiveWindowText(recovered);
         result.recoveredContextTitle = recovered.title;
         result.recoveredContextProcess = recovered.hwnd ? ProcessNameForPid(recovered.pid) : L"";
@@ -451,7 +552,7 @@ RecoveryResult EvaluateSafeContextRecovery(const RecoveryRequest& request) {
     result.recoveredMarkersOk = VerifyMarkers(observed, request.policy.recoveryExpectedMarkers);
     if (!request.policy.recoveryExpectedMarkers.empty() && !result.recoveredMarkersOk) {
         Stop(result, L"RECOVERY_FAILED", L"Recovery completed but expected markers were not verified after reobserve.");
-        return result;
+        return FinalizeResult();
     }
 
     result.recoverySuccess = true;
@@ -466,7 +567,7 @@ RecoveryResult EvaluateSafeContextRecovery(const RecoveryRequest& request) {
     } else {
         result.resumeAllowed = true;
     }
-    return result;
+    return FinalizeResult();
 }
 
 std::wstring RecoveryPolicyJson(const SafeRecoveryPolicy& policy) {
@@ -508,6 +609,8 @@ std::wstring RecoveryResultJson(const RecoveryResult& result) {
          << L",\"resume_block_reason\":" << JsonString(result.resumeBlockReason)
          << L",\"active_protection_detected\":" << (result.activeProtectionDetected ? L"true" : L"false")
          << L",\"credential_required_detected\":" << (result.credentialRequiredDetected ? L"true" : L"false")
+         << L",\"core_wait_summary\":" << CoreWaitStateSummaryJson(result.coreWaitSummary)
+         << L",\"core_waits\":" << CoreWaitStateArrayJson(result.coreWaits)
          << L"}";
     return json.str();
 }

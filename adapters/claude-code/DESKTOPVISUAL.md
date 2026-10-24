@@ -4,6 +4,10 @@ DesktopVisual is a Windows-only, agent-agnostic, auditable, safety-bounded Compu
 
 Primary flow: `observe-locate-act-verify`.
 
+Current launch authority: `docs\LAUNCH_CONTRACT.md`.
+
+App, browser, software, `.lnk`, `.url`, and desktop shortcut startup must follow the v1.1.12 Launch Contract: desktop icon double-click first, keyboard/Start Menu second only with evidence, backend third only with Layer 1 and Layer 2 failure evidence. Visible/action `--help` and bare `--dry-run` discovery forms are non-executing.
+
 Recommended sequence:
 
 ```powershell

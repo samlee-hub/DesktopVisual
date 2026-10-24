@@ -46,3 +46,5 @@ bool IsOperationTimelineExternalOrchestrationDelay(const OperationTimelineEntry&
 bool IsOperationTimelineFixedSleepCandidate(const OperationTimelineEntry& entry);
 std::wstring OperationTimelineEntryJson(const OperationTimelineEntry& entry);
 std::wstring OperationTimelineProfilerSelftestDataJson();
+std::wstring LatencyObservabilityRequiredFieldsJson();
+std::wstring BuildLatencyBaselineSummaryJson(const std::wstring& version, const std::wstring& command);

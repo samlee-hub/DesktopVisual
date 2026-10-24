@@ -1,5 +1,9 @@
 # DesktopVisual Generic CLI Adapter
 
+Current launch authority: `docs\LAUNCH_CONTRACT.md`.
+
+App, browser, software, `.lnk`, `.url`, and shortcut startup must follow the v1.1.12 Launch Contract: desktop icon double-click first, keyboard/Start Menu second only with evidence, backend third only with Layer 1 and Layer 2 failure evidence. Visible/action `--help` and bare `--dry-run` discovery forms are non-executing.
+
 This adapter defines a neutral shell contract for any CLI agent or human script using DesktopVisual as a Windows-only, agent-agnostic, auditable, safety-bounded Computer Use Runtime.
 
 Primary flow: `observe-locate-act-verify`.

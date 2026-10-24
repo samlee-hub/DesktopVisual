@@ -30,6 +30,53 @@ bool Contains(const std::wstring& value, const std::wstring& needle) {
     return value.find(needle) != std::wstring::npos;
 }
 
+std::wstring StripCStyleNonStructuralText(const std::wstring& value, bool& inBlockComment) {
+    std::wstring out;
+    bool inString = false;
+    bool escaped = false;
+    wchar_t quote = 0;
+
+    for (size_t i = 0; i < value.size(); ++i) {
+        wchar_t ch = value[i];
+        wchar_t next = (i + 1 < value.size()) ? value[i + 1] : 0;
+
+        if (inBlockComment) {
+            if (ch == L'*' && next == L'/') {
+                inBlockComment = false;
+                ++i;
+            }
+            continue;
+        }
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch == L'\\') {
+                escaped = true;
+            } else if (ch == quote) {
+                inString = false;
+                quote = 0;
+            }
+            continue;
+        }
+        if (ch == L'/' && next == L'/') {
+            break;
+        }
+        if (ch == L'/' && next == L'*') {
+            inBlockComment = true;
+            ++i;
+            continue;
+        }
+        if (ch == L'"' || ch == L'\'') {
+            inString = true;
+            quote = ch;
+            escaped = false;
+            continue;
+        }
+        out.push_back(ch);
+    }
+    return out;
+}
+
 void AddFinding(IncrementalCodeInputVerifierResult& result, const std::wstring& finding) {
     result.ok = false;
     result.findings.push_back(finding);
@@ -51,8 +98,10 @@ bool HasBalancedSimpleDelimiters(const std::vector<StructuredCodeLine>& lines) {
     int paren = 0;
     int bracket = 0;
     int brace = 0;
+    bool inBlockComment = false;
     for (const auto& line : lines) {
-        for (wchar_t ch : line.contentWithoutIndent) {
+        std::wstring structural = StripCStyleNonStructuralText(line.contentWithoutIndent, inBlockComment);
+        for (wchar_t ch : structural) {
             if (ch == L'(') ++paren;
             if (ch == L')') --paren;
             if (ch == L'[') ++bracket;

@@ -63,6 +63,22 @@ bool IsNoFailureSignal(const FailureAttributionNormalizationInput& input) {
         IsSuccessResult(input.executionResult);
 }
 
+std::wstring CategoryToFailureClass(const std::wstring& category) {
+    std::wstring lower = Lower(category);
+    if (lower == L"success_no_failure") return L"";
+    if (lower == L"runner_wrapper_failure") return L"runner_wrapper_failure";
+    if (lower == L"command_discovery_failure") return L"command_discovery_failure";
+    if (lower == L"code_input_policy_failure") return L"code_input_policy_failure";
+    if (lower == L"selector_ambiguity_failure") return L"selector_ambiguity_failure";
+    if (lower == L"environment_blocked") return L"environment_failure";
+    if (lower == L"active_protection" || lower == L"credential_required") return L"user_visible_stop_condition";
+    if (lower == L"execution_verification_failed") return L"runtime_gui_failure";
+    if (lower == L"locator_failure" && category.find(L"UNIQUE") != std::wstring::npos) return L"selector_ambiguity_failure";
+    if (lower == L"locator_failure") return L"runtime_gui_failure";
+    if (lower == L"unknown_failure") return L"runtime_gui_failure";
+    return lower;
+}
+
 FailureAttributionNormalizationResult MakeResult(
     const std::wstring& category,
     const std::wstring& reason,
@@ -70,6 +86,7 @@ FailureAttributionNormalizationResult MakeResult(
     FailureAttributionNormalizationResult result;
     result.normalizedCategory = category;
     result.reason = reason;
+    result.failureClass = CategoryToFailureClass(category);
     result.rawCompletedUnverified = AnyContains(JoinedSignals(input), {L"RAW_COMPLETED_UNVERIFIED", L"raw_completed_unverified"});
     result.successWithoutFailure = category == L"SUCCESS_NO_FAILURE";
     result.unknownMappedToSuccess = result.successWithoutFailure &&
@@ -81,6 +98,7 @@ FailureAttributionNormalizationResult MakeResult(
          << L",\"failure_type\":" << simplejson::Quote(input.failureType)
          << L",\"failure_code\":" << simplejson::Quote(input.failureCode)
          << L",\"normalized_failure_category\":" << simplejson::Quote(result.normalizedCategory)
+         << L",\"failure_class\":" << simplejson::Quote(result.failureClass)
          << L",\"reason\":" << simplejson::Quote(result.reason)
          << L",\"raw_completed_unverified\":" << simplejson::Bool(result.rawCompletedUnverified)
          << L",\"unknown_mapped_to_success\":" << simplejson::Bool(result.unknownMappedToSuccess)
@@ -105,6 +123,16 @@ bool IsKnownNormalizedFailureCategory(const std::wstring& category) {
         L"EXECUTION_VERIFICATION_FAILED",
         L"EVIDENCE_MISSING",
         L"ENVIRONMENT_BLOCKED",
+        L"RUNTIME_GUI_FAILURE",
+        L"CODE_INPUT_POLICY_FAILURE",
+        L"SELECTOR_AMBIGUITY_FAILURE",
+        L"COMMAND_DISCOVERY_FAILURE",
+        L"RUNNER_WRAPPER_FAILURE",
+        L"CODEX_ORCHESTRATION_FAILURE",
+        L"TEST_HARNESS_FAILURE",
+        L"USER_VISIBLE_STOP_CONDITION",
+        L"BUILD_COMPILE_FAILURE",
+        L"PROGRAM_CORRECTNESS_FAILURE",
         L"UNKNOWN_FAILURE",
         L"SUCCESS_NO_FAILURE"
     };
@@ -125,6 +153,49 @@ FailureAttributionNormalizationResult NormalizeFailureAttribution(
     }
     if (lowerResult == L"raw_completed_unverified" || AnyContains(text, {L"RAW_COMPLETED_UNVERIFIED"})) {
         return MakeResult(L"EVIDENCE_MISSING", L"Raw completion without independent verification is evidence missing, not success.", input);
+    }
+    if (lowerType == L"command_discovery_failure" || AnyContains(text, {
+        L"command_discovery",
+        L"command discovery",
+        L"safe explicit command list",
+        L"invalid command probing"
+    })) {
+        if (AnyContains(text, {L"INVALID_ARGUMENT", L"invalid argument", L"empty command"})) {
+            return MakeResult(L"COMMAND_DISCOVERY_FAILURE", L"Command discovery/probing failed outside the user-visible Runtime GUI action count.", input);
+        }
+    }
+    if (lowerType == L"runner_wrapper_failure" || AnyContains(text, {
+        L"Missing command",
+        L"missing command",
+        L"no runtime subcommand",
+        L"empty runtime subcommand",
+        L"wrapper variable error",
+        L"wrapper sent no runtime subcommand",
+        L"wrapper invocation failed",
+        L"is not recognized as the name of a cmdlet",
+        L"not recognized as an internal or external command",
+        L"CommandNotFoundException",
+        L"ParameterBindingException"
+    })) {
+        return MakeResult(L"RUNNER_WRAPPER_FAILURE", L"Runner or wrapper failed before a Runtime GUI action was issued.", input);
+    }
+    if (lowerType == L"code_input_policy_failure" || AnyContains(text, {
+        L"STRUCTURED_CODE_INPUT_PLAN_INVALID",
+        L"BLOCKED_PREINPUT_CODE_STRUCTURE_INVALID",
+        L"CODE_STRUCTURE_MISMATCH",
+        L"code-input policy",
+        L"code input policy",
+        L"visible keyboard recovery after runtime code-input policy"
+    })) {
+        return MakeResult(L"CODE_INPUT_POLICY_FAILURE", L"Code input policy rejected or corrupted a visible keyboard code input plan.", input);
+    }
+    if (lowerType == L"selector_ambiguity_failure" || AnyContains(text, {
+        L"UIA_ELEMENT_NOT_UNIQUE",
+        L"LOCATOR_NOT_UNIQUE",
+        L"TARGET_NOT_UNIQUE",
+        L"selector ambiguity"
+    })) {
+        return MakeResult(L"SELECTOR_AMBIGUITY_FAILURE", L"Selector matched more than one candidate without sufficient disambiguation.", input);
     }
     if (lowerType == L"locator_failure" || AnyContains(text, {
         L"FAIL_FIELD_NOT_FOUND",

@@ -2,6 +2,87 @@
 
 DesktopVisual project control file.
 
+## Read This First
+
+1. Read `CURRENT_EXECUTION_CONTRACT.md`.
+2. Read `docs\LAUNCH_CONTRACT.md` for all app/browser/software/shortcut startup behavior.
+3. Read `docs\RELEASE_CHANNELS.md` for tree and release channel semantics.
+4. Read `docs\LATENCY_OBSERVABILITY.md` for latency schema, VLM lazy/cache report semantics, core wait-state report fields, and workflow wait-state report fields.
+5. Read `docs\CORE_WAIT_STATE_HARDENING.md` when touching core wait-state behavior.
+6. Read `docs\WORKFLOW_WAIT_STATE_HARDENING.md` when touching workflow wait-state behavior.
+7. Read `docs\VS_CODE_INPUT_AND_EVIDENCE_HARDENING.md` when touching VS code input, selector disambiguation, timeline evidence, wait accounting, or failure classification.
+8. Read `docs\VLM_LAZY_LOADING.md` when touching VLM provider probe/cache/degrade behavior.
+9. Read this top section.
+10. Read `COMMAND_PROTOCOL.md` only from its `Current Minimal Agent Contract` unless command detail is needed.
+11. Treat old v3/v4/v5/v6 sections as historical lineage, not current policy.
+
+## Current Execution Contract
+
+- Current line: `v1.1.x`.
+- Current version task: `v1.1.12 Launch Contract Unification, Safe CLI Discovery, and VS Startup Convergence`.
+- Next planned stage: stop after protected v1.1.12 local-use sync; do not enter v1.2.0.
+- Highest-priority contract: `CURRENT_EXECUTION_CONTRACT.md`.
+- Launch contract entry: `docs\LAUNCH_CONTRACT.md`.
+- Release channel semantics entry: `docs\RELEASE_CHANNELS.md`.
+- Latency observability entry: `docs\LATENCY_OBSERVABILITY.md`.
+- Core wait-state hardening entry: `docs\CORE_WAIT_STATE_HARDENING.md`.
+- Workflow wait-state hardening entry: `docs\WORKFLOW_WAIT_STATE_HARDENING.md`.
+- VS code-input and evidence hardening entry: `docs\VS_CODE_INPUT_AND_EVIDENCE_HARDENING.md`.
+- Invalid artifact lifecycle entry: `docs\INVALID_ARTIFACT_LIFECYCLE.md`.
+- VLM lazy loading entry: `docs\VLM_LAZY_LOADING.md`.
+- AGENTS.md is a current agent/developer entry, not the final source for permission semantics when it conflicts with `CURRENT_EXECUTION_CONTRACT.md`.
+
+## Current Stage Boundaries
+
+Allowed in v1.1.12:
+
+- Add launch contract docs, Runtime launch evidence fields, visible/action CLI non-executing discovery handling, VS launch preflight fixture logic, lifecycle path resolver scripts, selftests, and evidence.
+- Run protected developer-to-local-use sync only after developer validation passes.
+- Update version metadata, current documentation, selftests, sync isolation rules, evidence indexes, and v1.1.12 development/sync evidence.
+- Preserve required v1.1.1-v1.1.11 evidence.
+
+Forbidden in v1.1.12:
+
+- Do not change PermissionManager decisions.
+- Do not reduce permissions.
+- Do not sync `E:\desktopvisualproject\desktop_release` until developer validation passes and robocopy dry-run evidence is recorded.
+- Do not create a public restricted release.
+- Do not create a public-dist tree.
+- Do not change VLM behavior, VLM timeout, provider wrappers, lazy/cache/degrade behavior, or API/provider architecture.
+- Do not make clipboard paste the default input path.
+- Do not make direct file writes the default fallback.
+- Do not change code-input behavior except version/selftest metadata.
+- Do not bypass Visual Studio UI for source code input.
+- Do not run a Visual Studio field test.
+- Do not copy developer `.desktopvisual_local` state to release.
+- Do not delete release `.desktopvisual_local` state through mirror sync.
+- Do not lower STOP conditions.
+- Do not run benchmark, public packaging, Visual Studio field test, full repeat field test, or v1.2.0 work during development.
+
+## Tree And Permission Boundary
+
+- Developer tree: `E:\desktopvisualproject\desktopvisual`.
+- Local-use/demo release tree: `E:\desktopvisualproject\desktop_release`.
+- Future restricted public release: not created yet.
+- Detailed release channel semantics: `docs\RELEASE_CHANNELS.md`.
+- v1.1.1 through v1.1.12 develop first in the developer tree.
+- v1.1.12 synchronizes `desktop_release` only after developer validation and only with protected exclusions.
+- v1.1.12 does not create a public restricted release.
+- `desktop_release` remains not the final restricted public release.
+- `.desktopvisual_local` is local lifecycle state and must never be mirrored across trees.
+- Developer `developer_versions` state is developer-local only.
+- Release `release_actions` state is release-local only.
+- v1.2.0 sync does not create a public restricted release by default.
+- Current `desktop_release` is a local-use/demo/testing release tree.
+- Developer and current `desktop_release` permission semantics remain aligned.
+- Do not infer permission reduction from the word `release`.
+- Ordinary apps, ordinary web, HTTPS, localhost, local HTML, IDE, Explorer, browser, email, communication pages, code platforms, programming-practice pages, and broad words such as `test`, `exam`, `challenge`, `assessment`, `interview`, `contest`, and `submit` do not trigger STOP by themselves.
+- Concrete active protection or security interception triggers STOP.
+
+## Historical Documents Warning
+
+Long v3/v4/v5/v6 sections below are retained for lineage and compatibility detail. They do not override `CURRENT_EXECUTION_CONTRACT.md`.
+
 ## Project Identity
 
 - Repository root: `E:\desktopvisualproject\desktopvisual`.
@@ -13,19 +94,76 @@ DesktopVisual project control file.
 
 ## Current Development State
 
-current_trusted_version: 1.1.0
-runtime_version: 1.1.0
-last_completed_version: 1.1.0
+current_trusted_version: 1.1.12
+runtime_version: 1.1.12
+last_completed_version: 1.1.11
 last_completed_status: pass
-ready_for_next_version: true
-next_planned_version: post_v1_1_0_github_sync_when_user_requests
-current_stage: developer_1_1_0_public_permission_agent_efficiency
+ready_for_next_version: false
+next_planned_version: none
+next_planned_stage: stop after v1.1.12 local-use sync; do not enter v1.2.0
+field_testing_required_before_v1_2_0: false
+current_stage: launch_contract_vs_startup_convergence
 developer_runtime_ux_optimization: pass
 developer_rc_ready: true
-public_release_ready: true
+public_release_ready: false
 developer_full_access_default: true
-release_permission_hardening_deferred: false
-public_release_hardening_started: true
+release_permission_hardening_deferred: true
+public_release_hardening_started: false
+desktop_release_sync_deferred_until_v1_1_9_acceptance: true
+desktop_release_sync_deferred_during_v1_1_10: true
+public_restricted_release_created: false
+runtime_behavior_changed: true
+runtime_instrumentation_added: false
+code_input_behavior_changed: false
+launch_behavior_changed: true
+launch_contract_unified: true
+desktop_icon_first_enforced: true
+fallback_evidence_enforced: true
+bare_dry_run_non_executing: true
+visible_subcommand_help_non_executing: true
+vs_launch_preflight_implemented: true
+vs_installer_excluded: true
+multi_vs_target_ambiguity_blocked: true
+generic_visible_app_launch_constrained: true
+artifact_lifecycle_path_resolver_fixed: true
+developer_lifecycle_implemented: true
+release_action_lifecycle_implemented: true
+artifact_lifecycle_sync_isolation_implemented: true
+desktopvisual_local_sync_excluded: true
+developer_quarantine_can_sync_to_release: false
+release_action_quarantine_can_be_deleted_by_mirror_sync: false
+cpp_code_input_hardening_implemented: true
+visible_keyboard_fallback_ladder_implemented: true
+selector_disambiguation_improved: true
+event_timeline_v2_implemented: true
+event_timeline_v2_1_implemented: true
+wait_saved_deduplication_implemented: true
+failure_classification_improved: true
+real_payload_regression_added: true
+keyboard_safe_segmentation_implemented: true
+target_lock_preflight_implemented: true
+code_input_integrity_v2_implemented: true
+command_discovery_invalid_argument_isolated: true
+locator_miss_report_implemented: true
+first_action_proxy_report_implemented: true
+clipboard_paste_default_enabled: false
+direct_file_write_fallback_default_enabled: false
+vlm_lazy_loading_implemented: true
+vlm_cache_implemented: true
+negative_cache_implemented: true
+fast_vlm_degradation_implemented: true
+vlm_timeout_changed: false
+core_wait_behavior_changed: false
+state_wait_helper_added: true
+workflow_wait_helper_added: true
+sleep_replaced: false
+explorer_workflow_wait_changed: false
+browser_workflow_wait_changed: false
+code_ide_workflow_wait_changed: false
+workspace_hygiene_cleanup_only: true
+evidence_index_added: true
+field_test_readiness_added: true
+permission_reduced: false
 f12_force_exit_current_task: pass
 f12_force_exit_stop_code: STOP_USER_FORCE_EXIT_F12
 preflight_validation_hardening: pass
@@ -43,6 +181,17 @@ desktopvisual_1_0_3_1_legacy_mock_vlm_quarantine: pass
 desktopvisual_1_0_4_vs_cpp_complex_ide_workflow: pass
 desktopvisual_1_0_5_capture_ocr_performance_pipeline: pass
 desktopvisual_1_1_0_public_permission_agent_efficiency: pass
+desktopvisual_1_1_1_current_execution_contract_unification: pass
+desktopvisual_1_1_2_documentation_entry_slimming: pass
+desktopvisual_1_1_3_release_channel_semantic_cleanup: pass
+desktopvisual_1_1_4_latency_observability_baseline: pass
+desktopvisual_1_1_5_vlm_lazy_cache_fast_degradation: pass
+desktopvisual_1_1_6_core_wait_state_hardening: pass
+desktopvisual_1_1_7_workflow_wait_state_hardening: pass
+desktopvisual_1_1_8_workspace_hygiene_field_test_readiness: pass
+desktopvisual_1_1_9_vs_code_input_timeline_evidence_hardening: pass
+desktopvisual_1_1_10_vs_field_test_closure_hardening: pass
+desktopvisual_1_1_11_invalid_artifact_lifecycle: pass
 report_level: compact
 evidence_level: full
 progress_output: compact
@@ -51,6 +200,23 @@ artifact_evidence: full
 
 next_version_scope:
 
+- Current v1.1.x contract authority is `CURRENT_EXECUTION_CONTRACT.md`.
+- v1.1.1 unified the current execution contract across entry documents and did not change Runtime behavior, reduce permissions, sync `desktop_release`, or create a public restricted release.
+- v1.1.2 slims current documentation entry points and isolates old v3/v4/v5/v6 material as historical lineage without changing Runtime behavior, reducing permissions, syncing `desktop_release`, or creating a public restricted release.
+- v1.1.3 fixes developer tree / local-use demo release tree / future restricted public release semantics without changing Runtime behavior, reducing permissions, syncing `desktop_release`, or creating a public restricted release.
+- v1.1.4 adds latency observability and first-action baseline reporting with limited Runtime/report instrumentation. It does not optimize Runtime behavior, implement VLM lazy loading, shorten VLM timeout, replace Sleep, reduce permissions, sync `desktop_release`, or create a public restricted release.
+- v1.1.5 adds VLM lazy loading, positive/negative capability cache, fast VLM unavailable degradation, and VLM latency fields. It does not reduce permissions, replace Sleep, change non-VLM Runtime semantics, sync `desktop_release`, or create a public restricted release.
+- v1.1.6 adds core wait-state hardening for TaskRunner recovery, foreground preparation, safe context recovery, cursor/buffer stabilization, and narrow code editor stabilization evidence. It does not reduce permissions, change VLM behavior or timeout, optimize Explorer/Browser workflow waits, sync `desktop_release`, create a public restricted release, or create a public-dist tree.
+- v1.1.8 consolidates workspace hygiene, evidence indexing, and field-test readiness without Runtime behavior, permission, VLM, wait-helper, workflow, or release sync changes.
+- v1.1.9 hardens VS code input, selector disambiguation, timeline evidence, wait accounting, and failure classification after the v1.1.8 Visual Studio C++ field test.
+- v1.1.10 closes the v1.1.9 repeat field-test residuals with real projectdd payload regression, keyboard-safe segmentation, target lock preflight, code-input integrity v2, timeline v2.1 no-overlap evidence, command discovery isolation, locator miss/disambiguation reports, and first-action proxy reporting.
+- v1.1.11 establishes separated invalid artifact lifecycles for developer-version state and local-use release action state.
+- v1.1.12 unifies launch contract, safe CLI discovery, VS startup convergence, lifecycle path resolver behavior, and protected local-use sync.
+- v1.1.1 through v1.1.12 develop first in `E:\desktopvisualproject\desktopvisual`.
+- `E:\desktopvisualproject\desktop_release` remains a local-use / demo / testing tree and is synchronized in v1.1.12 only after developer validation with protected exclusions.
+- `.desktopvisual_local` must be excluded from sync and `robocopy /MIR` must exclude `.git`, `.desktopvisual_local`, `obj`, `build`, `.vs`, `.idea`, `.vscode`, `__pycache__`, `node_modules`, `field_test_*`, `release_sync_*`, `local_action_*`, and `behavior_action_*`.
+- v1.2.0 is not entered by v1.1.12 and remains a future user-approved stage, not a new public restricted release.
+- Future restricted public release work starts only when the user explicitly requests it.
 - v6.1 series is closed at v6.1.6.
 - v6.1.6 accepted based on Case1 QQ Mail fresh machine evidence, bottom-layer StepCompletionGate PASS, and Case2 PyCharm visible UI execution evidence.
 - PowerShell full-screen CopyFromScreen is now the default visible UI proof method; PrintWindow and OCR screenshots are auxiliary only.
@@ -82,8 +248,20 @@ next_version_scope:
 - DesktopVisual 1.0.3.1 quarantines legacy mock VLM commands as deprecated opt-in test fixtures, hardens real VLM command schema/reporting, and makes VLM locate-only action boundaries explicit. Normal VLM use goes through `RealVlmRuntimeBridge`, `vlm-capability-probe`, `vlm-assist-locate`, `vlm-candidate-validate`, and `tools\codex_vlm_provider.ps1`.
 - DesktopVisual 1.0.4 accepted the Visual Studio C++ Complex IDE Human-Like Workflow and preserved visible-first Runtime action semantics.
 - DesktopVisual 1.0.5 accepts the Full-screen Capture/OCR Performance Pipeline: full-screen frame registry, memory-frame OCR, foreground/window crop OCR from the same frame, async PNG evidence flush barrier, OCR cache/tile hash cache, and frame-bound VLM image transport. Public profile alignment is completed later in v1.1.0.
-- DesktopVisual 1.1.0 aligns public release ordinary visible desktop capability with developer ordinary capability, preserves active-protection/security STOP boundaries, adds compact progress/full evidence policy, and syncs release/public-dist trees. GitHub sync is not performed by this version task.
-- Next planned stage is GitHub sync only if the user explicitly requests it.
+- DesktopVisual 1.1.0 aligned public release ordinary visible desktop capability with developer ordinary capability, preserved active-protection/security STOP boundaries, added compact progress/full evidence policy, and synced release/public-dist trees. GitHub sync was not performed by that version task.
+- DesktopVisual 1.1.1 unified current execution contract entrypoints for the v1.1.x developer tree and current local-use release semantics.
+- DesktopVisual 1.1.2 slims current documentation entrypoints and makes historical lineage boundaries explicit.
+- DesktopVisual 1.1.3 fixes release channel semantics for the developer tree, local-use/demo release tree, and future restricted public release.
+- DesktopVisual 1.1.4 adds latency observability and first-action baseline reporting.
+- DesktopVisual 1.1.5 adds VLM Lazy Loading, Cache, and Fast Degradation.
+- DesktopVisual 1.1.6 adds Core Wait-State Hardening.
+- DesktopVisual 1.1.7 adds Workflow Wait-State Hardening.
+- DesktopVisual 1.1.8 adds Workspace Hygiene, Evidence Consolidation, and Field-Test Readiness.
+- DesktopVisual 1.1.9 adds VS Code Input, Timeline, and Evidence Accuracy Hardening.
+- DesktopVisual 1.1.10 adds Real VS Code-Input Zero-Corruption and Timeline Closure hardening.
+- DesktopVisual 1.1.11 adds Separated Invalid Artifact Lifecycle for developer-version and local-use release action state.
+- DesktopVisual 1.1.12 adds Launch Contract Unification, Safe CLI Discovery, and VS Startup Convergence.
+- Next planned stage is stop after v1.1.12 local-use sync; do not enter v1.2.0.
 
 compact_output_policy:
 
@@ -134,7 +312,7 @@ handoff_report:
 
 test_summary:
 
-- artifacts/dev1.0.5_capture_ocr_performance_pipeline/test_summary.md
+- artifacts/dev1.1.12_launch_contract_vs_startup_convergence/test_summary.md
 
 interrupted_attempt_report:
 
@@ -172,6 +350,14 @@ command_protocol_doc:
 development_status_doc:
 
 - docs/DEVELOPMENT_STATUS.md
+
+current_contract_doc:
+
+- CURRENT_EXECUTION_CONTRACT.md
+
+current_contract_selftest:
+
+- current_contract_selftest.ps1
 
 development_protocol_doc:
 
@@ -544,22 +730,22 @@ Version advancement rules:
 - if blocked, next_planned_version must be a hotfix/retry version, not the next major stage.
 - invalidated versions must not be used as valid evidence.
 
-Example if v6.0.0 passes:
+Example if a version passes:
 
-- current_trusted_version: 6.0.0
-- last_completed_version: 6.0.0
-- last_completed_status: accepted
+- current_trusted_version: <completed_version>
+- last_completed_version: <completed_version>
+- last_completed_status: pass
 - ready_for_next_version: true
-- next_planned_version: 6.1.0
+- next_planned_version: <next_version>
 
-Example if v6.0.0 fails:
+Example if a version fails:
 
-- current_trusted_version: 5.10.2
-- last_completed_version: 6.0.0
+- current_trusted_version: <previous_trusted_version>
+- last_completed_version: <attempted_version>
 - last_completed_status: blocked
 - ready_for_next_version: false
-- next_planned_version: 6.0.1
-- blocking_report: `artifacts/dev6.0.0_<stage>/blocking_report.md`
+- next_planned_version: <retry_or_hotfix_version>
+- blocking_report: `artifacts/dev<version>_<stage>/blocking_report.md`
 
 ## Known Limits Pointers
 

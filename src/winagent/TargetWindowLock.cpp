@@ -68,13 +68,35 @@ bool ProcessMatches(const WindowInfo& window, const std::wstring& process) {
     return ToLower(ProcessNameForPidLocal(window.pid)) == ToLower(process);
 }
 
+bool IsVisualStudioIdeLockRequest(const TargetWindowLockOptions& options) {
+    std::wstring title = ToLower(options.targetTitle);
+    std::wstring process = ToLower(options.targetProcess);
+    return (title.find(L"visual studio") != std::wstring::npos && (process.empty() || process == L"devenv.exe")) ||
+           process == L"devenv.exe";
+}
+
+bool IsAllowedVisualStudioIdeWindow(const WindowInfo& window) {
+    std::wstring title = ToLower(window.title);
+    std::wstring process = ToLower(ProcessNameForPidLocal(window.pid));
+    if (title.find(L"visual studio installer") != std::wstring::npos ||
+        title.find(L"installer") != std::wstring::npos ||
+        process.find(L"installer") != std::wstring::npos ||
+        process.find(L"setup") != std::wstring::npos) {
+        return false;
+    }
+    return process == L"devenv.exe";
+}
+
 std::vector<WindowInfo> FindMatches(const TargetWindowLockOptions& options) {
     std::vector<WindowInfo> matches;
+    bool visualStudioIdeRequest = IsVisualStudioIdeLockRequest(options);
     if (!options.targetHwnd.empty()) {
         HWND hwnd = nullptr;
         WindowInfo info;
         if (ParseHwnd(options.targetHwnd, hwnd) && WindowInfoFromHwndLocal(hwnd, info) && ProcessMatches(info, options.targetProcess)) {
-            matches.push_back(info);
+            if (!visualStudioIdeRequest || IsAllowedVisualStudioIdeWindow(info)) {
+                matches.push_back(info);
+            }
         }
         return matches;
     }
@@ -86,6 +108,9 @@ std::vector<WindowInfo> FindMatches(const TargetWindowLockOptions& options) {
             continue;
         }
         if (options.targetTitle.empty() && options.targetProcess.empty()) {
+            continue;
+        }
+        if (visualStudioIdeRequest && !IsAllowedVisualStudioIdeWindow(window)) {
             continue;
         }
         matches.push_back(window);

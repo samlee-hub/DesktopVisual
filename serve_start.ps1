@@ -27,10 +27,10 @@ if ([System.IO.Directory]::GetFiles('\\.\pipe\') -match 'DesktopVisualService') 
 }
 
 Write-Host "Starting DesktopVisual Service..." -ForegroundColor Cyan
-$args = @('serve', '--port', $Port, '--max-session-ms', $MaxSessionMs)
-if ($Token) { $args += '--token'; $args += $Token }
+$agentArgs = @('serve', '--port', $Port, '--max-session-ms', $MaxSessionMs)
+if ($Token) { $agentArgs += '--token'; $agentArgs += $Token }
 
-$proc = Start-Process -FilePath $WinAgent -ArgumentList $args -NoNewWindow -PassThru
+$proc = Start-Process -FilePath $WinAgent -ArgumentList $agentArgs -WindowStyle Hidden -PassThru
 Start-Sleep -Milliseconds 500
 
 if ($proc.HasExited) {

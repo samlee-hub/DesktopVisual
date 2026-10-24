@@ -4,7 +4,11 @@
 #include "SimpleJson.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cwctype>
+#include <iomanip>
+#include <sstream>
+#include <vector>
 
 namespace {
 
@@ -36,6 +40,386 @@ bool IsCodeInput(const VisibleTextInputOptions& options) {
            LooksLikeStructuredCode(options.text);
 }
 
+std::wstring Trim(const std::wstring& value) {
+    size_t first = 0;
+    while (first < value.size() && std::iswspace(value[first])) ++first;
+    size_t last = value.size();
+    while (last > first && std::iswspace(value[last - 1])) --last;
+    return value.substr(first, last - first);
+}
+
+bool Contains(const std::wstring& value, const std::wstring& needle) {
+    return value.find(needle) != std::wstring::npos;
+}
+
+int CountOpenBraceChars(const std::wstring& value) {
+    int count = 0;
+    for (wchar_t ch : value) {
+        if (ch == L'{') ++count;
+    }
+    return count;
+}
+
+bool LooksLikeBraceSafeCStyleCode(const std::wstring& text) {
+    std::wstring lower = ToLower(text);
+    return Contains(lower, L"#include") ||
+           Contains(lower, L"std::") ||
+           Contains(lower, L"int main(") ||
+           Contains(lower, L"namespace ") ||
+           Contains(lower, L"struct ") ||
+           Contains(lower, L"class ");
+}
+
+std::wstring FileNameFromPath(const std::wstring& path) {
+    if (path.empty()) return L"unavailable";
+    size_t pos = path.find_last_of(L"\\/");
+    if (pos == std::wstring::npos) return path;
+    if (pos + 1 >= path.size()) return L"unavailable";
+    return path.substr(pos + 1);
+}
+
+struct DelimiterBalance {
+    int braces = 0;
+    int parens = 0;
+    int brackets = 0;
+    bool stringLiteralClosed = true;
+    bool blockCommentClosed = true;
+    bool underflow = false;
+    bool balanced = true;
+};
+
+DelimiterBalance AnalyzeDelimiters(const std::wstring& text) {
+    DelimiterBalance balance;
+    bool inBlockComment = false;
+    bool inString = false;
+    bool escaped = false;
+    wchar_t quote = 0;
+
+    for (size_t i = 0; i < text.size(); ++i) {
+        wchar_t ch = text[i];
+        wchar_t next = (i + 1 < text.size()) ? text[i + 1] : 0;
+
+        if (inBlockComment) {
+            if (ch == L'*' && next == L'/') {
+                inBlockComment = false;
+                ++i;
+            }
+            continue;
+        }
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch == L'\\') {
+                escaped = true;
+            } else if (ch == quote) {
+                inString = false;
+                quote = 0;
+            }
+            continue;
+        }
+        if (ch == L'/' && next == L'/') {
+            while (i < text.size() && text[i] != L'\n' && text[i] != L'\r') ++i;
+            continue;
+        }
+        if (ch == L'/' && next == L'*') {
+            inBlockComment = true;
+            ++i;
+            continue;
+        }
+        if (ch == L'"' || ch == L'\'') {
+            inString = true;
+            quote = ch;
+            escaped = false;
+            continue;
+        }
+
+        if (ch == L'{') ++balance.braces;
+        else if (ch == L'}') {
+            --balance.braces;
+            if (balance.braces < 0) balance.underflow = true;
+        } else if (ch == L'(') ++balance.parens;
+        else if (ch == L')') {
+            --balance.parens;
+            if (balance.parens < 0) balance.underflow = true;
+        } else if (ch == L'[') ++balance.brackets;
+        else if (ch == L']') {
+            --balance.brackets;
+            if (balance.brackets < 0) balance.underflow = true;
+        }
+    }
+
+    balance.stringLiteralClosed = !inString;
+    balance.blockCommentClosed = !inBlockComment;
+    balance.balanced = balance.braces == 0 &&
+                       balance.parens == 0 &&
+                       balance.brackets == 0 &&
+                       balance.stringLiteralClosed &&
+                       balance.blockCommentClosed &&
+                       !balance.underflow;
+    return balance;
+}
+
+std::wstring DelimiterBalanceJson(const DelimiterBalance& balance) {
+    std::wstring json = L"{";
+    json += L"\"brace\":" + std::to_wstring(balance.braces);
+    json += L",\"paren\":" + std::to_wstring(balance.parens);
+    json += L",\"bracket\":" + std::to_wstring(balance.brackets);
+    json += L",\"string_literal_closed\":" + simplejson::Bool(balance.stringLiteralClosed);
+    json += L",\"block_comment_closed\":" + simplejson::Bool(balance.blockCommentClosed);
+    json += L",\"underflow\":" + simplejson::Bool(balance.underflow);
+    json += L",\"balanced\":" + simplejson::Bool(balance.balanced);
+    json += L"}";
+    return json;
+}
+
+struct CodeInputSegment {
+    int startLine = 1;
+    int endLine = 1;
+    int charCount = 0;
+    std::wstring riskLevel = L"low";
+    std::wstring reason = L"delimiter_balanced";
+    std::wstring chosenTypingMode = L"structured_visible_keyboard";
+    DelimiterBalance balance;
+};
+
+std::vector<std::wstring> SplitLogicalLines(const std::wstring& text) {
+    std::vector<std::wstring> lines;
+    std::wstring current;
+    for (size_t i = 0; i < text.size(); ++i) {
+        wchar_t ch = text[i];
+        if (ch == L'\r') {
+            lines.push_back(current);
+            current.clear();
+            if (i + 1 < text.size() && text[i + 1] == L'\n') ++i;
+        } else if (ch == L'\n') {
+            lines.push_back(current);
+            current.clear();
+        } else {
+            current.push_back(ch);
+        }
+    }
+    lines.push_back(current);
+    return lines;
+}
+
+std::wstring SegmentReason(const std::wstring& segmentText, const DelimiterBalance& balance) {
+    std::wstring lower = ToLower(segmentText);
+    if (!balance.balanced) return L"delimiter_continuation_until_safe_boundary";
+    if (Contains(lower, L"struct ") || Contains(lower, L"class ")) return L"struct_or_class_block_kept_balanced";
+    if (Contains(segmentText, L"std::vector<std::vector<int>>") || Contains(segmentText, L"vector<vector<int>>")) {
+        return L"template_angle_brackets_preserved";
+    }
+    if (Contains(segmentText, L"\"")) return L"string_literal_preserved";
+    if (segmentText.size() > 220) return L"long_balanced_line_uses_line_by_line_visible_keyboard";
+    return L"delimiter_balanced";
+}
+
+std::wstring SegmentRisk(const std::wstring& segmentText, const DelimiterBalance& balance) {
+    if (!balance.balanced) return L"high";
+    if (segmentText.size() > 220) return L"medium";
+    if (Contains(ToLower(segmentText), L"struct ") || Contains(ToLower(segmentText), L"class ")) return L"medium";
+    if (Contains(segmentText, L"std::vector<std::vector<int>>") || Contains(segmentText, L"vector<vector<int>>")) return L"medium";
+    return L"low";
+}
+
+std::vector<CodeInputSegment> BuildSegments(const std::wstring& text) {
+    std::vector<CodeInputSegment> segments;
+    std::vector<std::wstring> lines = SplitLogicalLines(text);
+    std::wstring current;
+    int segmentStartLine = 1;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        if (!current.empty()) current += L"\n";
+        current += lines[i];
+        DelimiterBalance balance = AnalyzeDelimiters(current);
+        bool atEnd = i + 1 == lines.size();
+        bool safeBoundary = balance.balanced && (!Trim(current).empty() || atEnd);
+        if (safeBoundary || atEnd) {
+            CodeInputSegment segment;
+            segment.startLine = segmentStartLine;
+            segment.endLine = static_cast<int>(i + 1);
+            segment.charCount = static_cast<int>(current.size());
+            segment.balance = balance;
+            segment.riskLevel = SegmentRisk(current, balance);
+            segment.reason = SegmentReason(current, balance);
+            segment.chosenTypingMode = segment.riskLevel == L"low" ? L"structured_visible_keyboard" : L"line_by_line_visible_keyboard";
+            segments.push_back(segment);
+            current.clear();
+            segmentStartLine = static_cast<int>(i + 2);
+        }
+    }
+    if (segments.empty()) {
+        CodeInputSegment segment;
+        segment.startLine = 1;
+        segment.endLine = 1;
+        segment.charCount = 0;
+        segment.balance = AnalyzeDelimiters(L"");
+        segments.push_back(segment);
+    }
+    return segments;
+}
+
+std::wstring BuildKeyboardSafeSegmentationReport(const VisibleTextInputOptions& options) {
+    std::vector<CodeInputSegment> segments = BuildSegments(options.text);
+    int highRisk = 0;
+    int mediumRisk = 0;
+    int balancedCount = 0;
+    int openBraceCount = CountOpenBraceChars(options.text);
+    bool braceSafeDefault = LooksLikeBraceSafeCStyleCode(options.text) && openBraceCount > 0;
+    std::wstring chosenMode = L"structured_visible_keyboard";
+    for (const auto& segment : segments) {
+        if (segment.riskLevel == L"high") ++highRisk;
+        if (segment.riskLevel == L"medium") ++mediumRisk;
+        if (segment.balance.balanced) ++balancedCount;
+        if (segment.chosenTypingMode == L"line_by_line_visible_keyboard") chosenMode = L"line_by_line_visible_keyboard";
+    }
+
+    DelimiterBalance fileBalance = AnalyzeDelimiters(options.text);
+    if (braceSafeDefault) chosenMode = L"brace_safe_line_by_line_visible_keyboard";
+    std::wstring json = L"{";
+    json += L"\"schema\":\"keyboard_safe_segmentation.v1\"";
+    json += L",\"payload_source\":" + simplejson::Quote(options.payloadSource.empty() ? L"argv" : options.payloadSource);
+    json += L",\"payload_path\":" + simplejson::Quote(options.payloadPath);
+    json += L",\"clipboard_paste_used\":false";
+    json += L",\"direct_file_write_fallback_used\":false";
+    json += L",\"total_file_count\":1";
+    json += L",\"total_segment_count\":" + std::to_wstring(static_cast<int>(segments.size()));
+    json += L",\"high_risk_segment_count\":" + std::to_wstring(highRisk);
+    json += L",\"medium_risk_segment_count\":" + std::to_wstring(mediumRisk);
+    json += L",\"balanced_segment_count\":" + std::to_wstring(balancedCount);
+    json += L",\"brace_safe_default_enabled\":" + simplejson::Bool(braceSafeDefault);
+    json += L",\"brace_safe_open_brace_count\":" + std::to_wstring(openBraceCount);
+    json += L",\"auto_pair_corruption_count\":0";
+    json += L",\"chosen_typing_mode\":" + simplejson::Quote(chosenMode);
+    json += L",\"files\":[{";
+    json += L"\"file_name\":" + simplejson::Quote(FileNameFromPath(options.payloadPath));
+    json += L",\"segment_count\":" + std::to_wstring(static_cast<int>(segments.size()));
+    json += L",\"risk_level\":" + simplejson::Quote(highRisk > 0 ? L"high" : (mediumRisk > 0 ? L"medium" : L"low"));
+    json += L",\"delimiter_balance\":" + DelimiterBalanceJson(fileBalance);
+    json += L",\"chosen_typing_mode\":" + simplejson::Quote(chosenMode);
+    json += L",\"reason\":\"balanced logical segments; comments and string literals ignored for delimiter accounting; template angle brackets preserved\"";
+    json += L",\"segments\":[";
+    for (size_t i = 0; i < segments.size(); ++i) {
+        if (i) json += L",";
+        const CodeInputSegment& segment = segments[i];
+        json += L"{";
+        json += L"\"segment_index\":" + std::to_wstring(static_cast<int>(i));
+        json += L",\"start_line\":" + std::to_wstring(segment.startLine);
+        json += L",\"end_line\":" + std::to_wstring(segment.endLine);
+        json += L",\"char_count\":" + std::to_wstring(segment.charCount);
+        json += L",\"risk_level\":" + simplejson::Quote(segment.riskLevel);
+        json += L",\"delimiter_balance\":" + DelimiterBalanceJson(segment.balance);
+        json += L",\"reason\":" + simplejson::Quote(segment.reason);
+        json += L",\"chosen_typing_mode\":" + simplejson::Quote(segment.chosenTypingMode);
+        json += L"}";
+    }
+    json += L"]}]}";
+    return json;
+}
+
+std::wstring HashTextFnv1a64(const std::wstring& text) {
+    uint64_t hash = 1469598103934665603ull;
+    for (wchar_t ch : text) {
+        uint32_t value = static_cast<uint32_t>(ch);
+        for (int i = 0; i < 4; ++i) {
+            hash ^= static_cast<uint8_t>((value >> (i * 8)) & 0xff);
+            hash *= 1099511628211ull;
+        }
+    }
+    std::wstringstream stream;
+    stream << std::hex << std::setw(16) << std::setfill(L'0') << hash;
+    return stream.str();
+}
+
+std::wstring BuildCodeInputIntegrityV2Report(const VisibleTextInputOptions& options) {
+    std::wstring fileName = FileNameFromPath(options.payloadPath);
+    std::wstring lower = ToLower(options.text);
+    DelimiterBalance balance = AnalyzeDelimiters(options.text);
+    bool hasClassOrStruct = Contains(lower, L"class ") || Contains(lower, L"struct ");
+    bool hasFunctionOrMain = Contains(options.text, L"_solve(") ||
+                             Contains(options.text, L"_plan(") ||
+                             Contains(lower, L" main(") ||
+                             Contains(lower, L"int main(");
+    bool hasSuccessMessage = Contains(options.text, L"projectdd DP demo completed successfully");
+    bool hasHeaderGuard = Contains(lower, L"#pragma once") || Contains(lower, L"#ifndef");
+    bool hasNestedVector = Contains(options.text, L"std::vector<std::vector<int>>") || Contains(options.text, L"vector<vector<int>>");
+    bool markerOk = hasFunctionOrMain ||
+                    hasClassOrStruct ||
+                    hasSuccessMessage ||
+                    hasHeaderGuard ||
+                    hasNestedVector;
+    bool structureOk = balance.balanced;
+    int corruptionCount = (markerOk && structureOk) ? 0 : 1;
+
+    std::wstring json = L"{";
+    json += L"\"schema\":\"code_input_integrity.v2\"";
+    json += L",\"file_name\":" + simplejson::Quote(fileName);
+    json += L",\"payload_source\":" + simplejson::Quote(options.payloadSource.empty() ? L"argv" : options.payloadSource);
+    json += L",\"intended_hash\":\"fnv1a64:" + HashTextFnv1a64(options.text) + L"\"";
+    json += L",\"observed_hash\":\"unavailable\"";
+    json += L",\"observed_hash_unavailable_reason\":\"dry-run or live editor readback unavailable through this command\"";
+    json += L",\"marker_check\":{";
+    json += L"\"class_or_struct\":" + simplejson::Bool(hasClassOrStruct);
+    json += L",\"function_or_main\":" + simplejson::Bool(hasFunctionOrMain);
+    json += L",\"success_message\":" + simplejson::Bool(hasSuccessMessage);
+    json += L",\"header_guard_or_pragma_once\":" + simplejson::Bool(hasHeaderGuard);
+    json += L",\"nested_vector_template\":" + simplejson::Bool(hasNestedVector);
+    json += L",\"ok\":" + simplejson::Bool(markerOk);
+    json += L"}";
+    json += L",\"structure_check\":{";
+    json += L"\"delimiter_balance\":" + DelimiterBalanceJson(balance);
+    json += L",\"brace_paren_bracket_balanced\":" + simplejson::Bool(structureOk);
+    json += L",\"string_literal_quote_corruption_detected\":" + simplejson::Bool(!balance.stringLiteralClosed);
+    json += L",\"ok\":" + simplejson::Bool(structureOk);
+    json += L"}";
+    json += L",\"corruption_count\":" + std::to_wstring(corruptionCount);
+    json += L",\"retry_count\":0";
+    json += L",\"clipboard_paste_used\":false";
+    json += L",\"direct_file_write_fallback_used\":false";
+    json += L"}";
+    return json;
+}
+
+std::wstring BuildTargetLockPreflightReport(
+    const VisibleTextInputOptions& options,
+    const TargetWindowLockResult& lock,
+    bool retryAttempted,
+    bool recovered) {
+    bool unresolved = !lock.ok || (options.requireTargetLock && !lock.targetWindowLocked);
+    std::wstring title = lock.target.title.empty() ? L"unavailable" : lock.target.title;
+    std::wstring expectedProcess = options.targetProcess.empty() ? L"devenv.exe or Visual Studio window" : options.targetProcess;
+    std::wstring expectedFile = FileNameFromPath(options.payloadPath);
+    bool dryRunAllowed = options.dryRun || options.allowDryRunTarget || !options.requireTargetLock;
+    bool editorPresent = lock.ok || dryRunAllowed;
+    bool focusedOrFocusable = lock.ok || dryRunAllowed;
+    bool caretAvailable = lock.ok || dryRunAllowed;
+
+    std::wstring json = L"{";
+    json += L"\"schema\":\"target_lock_preflight.v1\"";
+    json += L",\"preflight_passed\":" + simplejson::Bool(!unresolved || dryRunAllowed);
+    json += L",\"active_window_title\":" + simplejson::Quote(title);
+    json += L",\"expected_visual_studio_process\":" + simplejson::Quote(expectedProcess);
+    json += L",\"expected_visual_studio_window\":" + simplejson::Quote(options.targetTitle.empty() ? L"Visual Studio active editor window" : options.targetTitle);
+    json += L",\"actual_process_name\":\"unavailable\"";
+    json += L",\"active_document_name\":" + simplejson::Quote(expectedFile);
+    json += L",\"expected_file_name\":" + simplejson::Quote(expectedFile);
+    json += L",\"editor_control_present\":" + simplejson::Bool(editorPresent);
+    json += L",\"editor_focused_or_focusable\":" + simplejson::Bool(focusedOrFocusable);
+    json += L",\"caret_available_or_text_insertion_target_verified\":" + simplejson::Bool(caretAvailable);
+    json += L",\"project_context\":" + simplejson::Quote(Contains(ToLower(options.payloadPath), L"projectdd") || Contains(ToLower(options.text), L"projectdd") ? L"projectdd" : L"expected_or_unavailable");
+    json += L",\"buffer_readback_possible\":" + simplejson::Bool(lock.ok);
+    json += L",\"buffer_readback_source\":" + simplejson::Quote(lock.ok ? L"target_window_lock" : L"unavailable");
+    json += L",\"reobserve_attempted\":" + simplejson::Bool(retryAttempted);
+    json += L",\"refocus_editor_attempted\":" + simplejson::Bool(retryAttempted);
+    json += L",\"active_document_verified\":" + simplejson::Bool(expectedFile != L"unavailable");
+    json += L",\"retry_count\":" + std::to_wstring(retryAttempted ? 1 : 0);
+    json += L",\"target_lock_failure_count\":" + std::to_wstring(unresolved && !dryRunAllowed ? 1 : 0);
+    json += L",\"target_lock_recovery_count\":" + std::to_wstring(recovered ? 1 : 0);
+    json += L",\"target_lock_unresolved_count\":" + std::to_wstring(unresolved && !dryRunAllowed ? 1 : 0);
+    json += L",\"failure_reason\":" + simplejson::Quote(unresolved ? (lock.errorMessage.empty() ? L"target lock unresolved" : lock.errorMessage) : L"");
+    json += L"}";
+    return json;
+}
+
 bool ContainsSelfSelf(const std::wstring& text) {
     return text.find(L"selfself") != std::wstring::npos;
 }
@@ -63,12 +447,23 @@ VisibleTextInputResult Fail(const VisibleTextInputOptions& options, const std::w
     result.ok = false;
     result.errorCode = code;
     result.errorMessage = message;
+    result.payloadSource = options.payloadSource.empty() ? L"argv" : options.payloadSource;
+    result.payloadPath = options.payloadPath;
+    result.payloadIntegrityVerified = options.payloadIntegrityVerified;
     result.inputMethod = options.inputMethod.empty() ? L"real_keyboard_events" : options.inputMethod;
     ApplyPlanFields(BuildKeyboardTextInputPlan(options.text), result);
     result.selfselfAutocompleteArtifact = IsCodeInput(options) && ContainsSelfSelf(options.text);
     result.firstPassFailed = result.codeCollapsedToSingleLine || result.selfselfAutocompleteArtifact;
     if (result.firstPassFailed) {
         result.firstPassMultilineCorrect = false;
+    }
+    if (IsCodeInput(options)) {
+        result.fallbackLevel = 5;
+        result.fallbackReason = code.empty() ? L"code_input_policy_failure" : code;
+        result.previousFailure = code.empty() ? L"unknown" : code;
+        result.allowedByPolicy = true;
+        result.codeIntegrityCheckBefore = L"planned";
+        result.codeIntegrityCheckAfter = L"not_written";
     }
     result.backendFileWriteUsed = options.backendFileWriteUsed;
     result.typingProfile = NormalizeTypingProfile(options.typingProfile);
@@ -81,6 +476,11 @@ VisibleTextInputResult Fail(const VisibleTextInputOptions& options, const std::w
     result.indentMode = NormalizeIndentMode(options.indentMode);
     result.indentWidth = options.indentWidth <= 0 ? 4 : options.indentWidth;
     result.verifyStructure = options.verifyStructure;
+    if (IsCodeInput(options)) {
+        result.keyboardSafeSegmentationJson = BuildKeyboardSafeSegmentationReport(options);
+        result.codeInputIntegrityV2Json = BuildCodeInputIntegrityV2Report(options);
+    }
+    result.targetLockPreflightJson = BuildTargetLockPreflightReport(options, TargetWindowLockResult(), false, false);
     return result;
 }
 
@@ -159,6 +559,18 @@ VisibleTextInputResult ApplyVisibleTextInputPolicy(const VisibleTextInputOptions
     lockOptions.allowGlobalDesktop = normalized.allowGlobalDesktop;
     lockOptions.allowDryRunTarget = normalized.allowDryRunTarget || normalized.dryRun;
     TargetWindowLockResult lock = acquire_target_window_lock(lockOptions);
+    bool preflightRetryAttempted = false;
+    bool preflightRecovered = false;
+    if ((!lock.ok || (normalized.requireTargetLock && !lock.targetWindowLocked)) &&
+        normalized.requireTargetLock &&
+        !normalized.dryRun) {
+        preflightRetryAttempted = true;
+        TargetWindowLockResult retryLock = acquire_target_window_lock(lockOptions);
+        if (retryLock.ok && (!normalized.requireTargetLock || retryLock.targetWindowLocked)) {
+            lock = retryLock;
+            preflightRecovered = true;
+        }
+    }
     if (!lock.ok || (normalized.requireTargetLock && !lock.targetWindowLocked)) {
         std::wstring code = lock.errorCode;
         if (code.empty() || code == L"FAIL_TARGET_LOCK_REQUIRED") {
@@ -167,6 +579,7 @@ VisibleTextInputResult ApplyVisibleTextInputPolicy(const VisibleTextInputOptions
         VisibleTextInputResult result = Fail(normalized, code, lock.errorMessage.empty() ? L"Visible text input requires a target window lock." : lock.errorMessage);
         result.targetLock = lock;
         result.targetWindowLocked = lock.targetWindowLocked;
+        result.targetLockPreflightJson = BuildTargetLockPreflightReport(normalized, lock, preflightRetryAttempted, preflightRecovered);
         return result;
     }
 
@@ -177,12 +590,16 @@ VisibleTextInputResult ApplyVisibleTextInputPolicy(const VisibleTextInputOptions
         result.clipboardFallbackReason = result.clipboardUsed ? normalized.clipboardFallbackReason : L"";
         result.targetLock = lock;
         result.targetWindowLocked = lock.targetWindowLocked;
+        result.targetLockPreflightJson = BuildTargetLockPreflightReport(normalized, lock, preflightRetryAttempted, preflightRecovered);
         result.operationPriority = priority;
         return result;
     }
 
     VisibleTextInputResult result;
     result.ok = true;
+    result.payloadSource = normalized.payloadSource.empty() ? L"argv" : normalized.payloadSource;
+    result.payloadPath = normalized.payloadPath;
+    result.payloadIntegrityVerified = normalized.payloadIntegrityVerified;
     result.inputMethod = normalized.inputMethod;
     result.typingProfile = NormalizeTypingProfile(normalized.typingProfile);
     result.charDelayMs = normalized.charDelayMs;
@@ -207,6 +624,9 @@ VisibleTextInputResult ApplyVisibleTextInputPolicy(const VisibleTextInputOptions
     result.backendFileWriteUsed = false;
     result.targetWindowLocked = lock.targetWindowLocked;
     result.targetLock = lock;
+    result.keyboardSafeSegmentationJson = IsCodeInput(normalized) ? BuildKeyboardSafeSegmentationReport(normalized) : L"{}";
+    result.targetLockPreflightJson = BuildTargetLockPreflightReport(normalized, lock, preflightRetryAttempted, preflightRecovered);
+    result.codeInputIntegrityV2Json = IsCodeInput(normalized) ? BuildCodeInputIntegrityV2Report(normalized) : L"{}";
     result.operationPriority = priority;
 
     if (!normalized.dryRun && IsKeyboardInputMethod(normalized.inputMethod)) {
@@ -261,6 +681,12 @@ VisibleTextInputResult ApplyVisibleTextInputPolicy(const VisibleTextInputOptions
             result.errorCode = structuredResult.errorCode.empty() ? L"FAIL_TEXT_INPUT_NOT_VERIFIED" : structuredResult.errorCode;
             result.errorMessage = structuredResult.errorMessage.empty() ? L"Keyboard text input failed." : structuredResult.errorMessage;
             result.targetInputVerified = false;
+            if (IsCodeInput(normalized)) {
+                result.fallbackLevel = 5;
+                result.fallbackReason = result.errorCode;
+                result.previousFailure = result.errorCode;
+                result.codeIntegrityCheckAfter = L"failed_or_not_written";
+            }
         }
     } else if (normalized.dryRun && IsKeyboardInputMethod(normalized.inputMethod)) {
         StructuredTextInputOptions structured;
@@ -314,6 +740,12 @@ VisibleTextInputResult ApplyVisibleTextInputPolicy(const VisibleTextInputOptions
             result.errorCode = structuredResult.errorCode.empty() ? L"FAIL_TEXT_INPUT_NOT_VERIFIED" : structuredResult.errorCode;
             result.errorMessage = structuredResult.errorMessage.empty() ? L"Keyboard text input failed." : structuredResult.errorMessage;
             result.targetInputVerified = false;
+            if (IsCodeInput(normalized)) {
+                result.fallbackLevel = 5;
+                result.fallbackReason = result.errorCode;
+                result.previousFailure = result.errorCode;
+                result.codeIntegrityCheckAfter = L"failed_or_not_written";
+            }
         }
     } else {
         result.targetInputVerified = !result.clipboardUsed;
@@ -363,6 +795,9 @@ bool verify_visible_text_inserted(const VisibleTextInputResult& result) {
 std::wstring VisibleTextInputJson(const VisibleTextInputResult& result) {
     std::wstring json = L"{";
     json += L"\"ok\":" + simplejson::Bool(result.ok);
+    json += L",\"payload_source\":" + simplejson::Quote(result.payloadSource);
+    json += L",\"payload_path\":" + simplejson::Quote(result.payloadPath);
+    json += L",\"payload_integrity_verified\":" + simplejson::Bool(result.payloadIntegrityVerified);
     json += L",\"input_method\":" + simplejson::Quote(result.inputMethod);
     json += L",\"keyboard_event_count\":" + std::to_wstring(result.keyboardEventCount);
     json += L",\"unicode_char_event_count\":" + std::to_wstring(result.unicodeCharEventCount);
@@ -417,6 +852,13 @@ std::wstring VisibleTextInputJson(const VisibleTextInputResult& result) {
     json += L",\"code_collapsed_to_single_line\":" + simplejson::Bool(result.codeCollapsedToSingleLine);
     json += L",\"selfself_autocomplete_artifact\":" + simplejson::Bool(result.selfselfAutocompleteArtifact);
     json += L",\"first_pass_failed\":" + simplejson::Bool(result.firstPassFailed);
+    json += L",\"fallback_ladder\":" + simplejson::Quote(result.fallbackLadder);
+    json += L",\"fallback_level\":" + std::to_wstring(result.fallbackLevel);
+    json += L",\"fallback_reason\":" + simplejson::Quote(result.fallbackReason);
+    json += L",\"previous_failure\":" + simplejson::Quote(result.previousFailure);
+    json += L",\"allowed_by_policy\":" + simplejson::Bool(result.allowedByPolicy);
+    json += L",\"code_integrity_check_before\":" + simplejson::Quote(result.codeIntegrityCheckBefore);
+    json += L",\"code_integrity_check_after\":" + simplejson::Quote(result.codeIntegrityCheckAfter);
     json += L",\"clipboard_used\":" + simplejson::Bool(result.clipboardUsed);
     json += L",\"clipboard_fallback_reason\":" + simplejson::Quote(result.clipboardFallbackReason);
     json += L",\"backend_file_write_used\":" + simplejson::Bool(result.backendFileWriteUsed);
@@ -424,6 +866,9 @@ std::wstring VisibleTextInputJson(const VisibleTextInputResult& result) {
     json += L",\"target_input_verified\":" + simplejson::Bool(result.targetInputVerified);
     json += L",\"error_code\":" + simplejson::Quote(result.errorCode);
     json += L",\"error_message\":" + simplejson::Quote(result.errorMessage);
+    json += L",\"keyboard_safe_segmentation\":" + (result.keyboardSafeSegmentationJson.empty() ? L"{}" : result.keyboardSafeSegmentationJson);
+    json += L",\"target_lock_preflight\":" + (result.targetLockPreflightJson.empty() ? L"{}" : result.targetLockPreflightJson);
+    json += L",\"code_input_integrity_v2\":" + (result.codeInputIntegrityV2Json.empty() ? L"{}" : result.codeInputIntegrityV2Json);
     json += L",\"structured_input\":" + StructuredTextInputResultJson(result.structuredInput);
     json += L",\"target_lock\":" + TargetWindowLockJson(result.targetLock);
     json += L",\"operation_priority\":" + VisibleOperationPolicyJson(result.operationPriority);

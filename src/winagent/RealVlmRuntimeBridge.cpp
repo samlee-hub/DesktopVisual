@@ -22,21 +22,26 @@
 
 namespace {
 
-const wchar_t* kBridgeDesktopVisualVersion = L"1.0.5";
+const wchar_t* kBridgeDesktopVisualVersion = L"1.1.5";
 const wchar_t* kCapabilityAvailable = L"VLM_AVAILABLE";
 const wchar_t* kCapabilityUnavailable = L"VLM_UNAVAILABLE";
 const wchar_t* kCapabilityUnknown = L"VLM_UNKNOWN";
 const wchar_t* kCapabilityTimeout = L"VLM_TIMEOUT";
 const wchar_t* kCapabilityInvalidResponse = L"VLM_INVALID_RESPONSE";
 const wchar_t* kCapabilityCandidateRejected = L"VLM_CANDIDATE_REJECTED";
+const int kDefaultCapabilityProbeTimeoutMs = 12000;
+const int kDefaultVlmInferenceTimeoutMs = 60000;
+const long long kDefaultPositiveCacheTtlSeconds = 24LL * 60LL * 60LL;
+const long long kDefaultNegativeCacheTtlSeconds = 5LL * 60LL;
 
 struct CapabilityProbeArgs {
     std::wstring provider = L"codex-cli";
     std::wstring sessionId;
     std::wstring probeImage;
-    int timeoutMs = 60000;
+    int timeoutMs = kDefaultCapabilityProbeTimeoutMs;
     bool cache = true;
-    long long ttlSeconds = 24LL * 60LL * 60LL;
+    long long ttlSeconds = kDefaultPositiveCacheTtlSeconds;
+    long long negativeTtlSeconds = kDefaultNegativeCacheTtlSeconds;
     std::wstring simulation;
 };
 
@@ -50,6 +55,7 @@ struct ProviderProbeResult {
     std::wstring rawOutputPath;
     std::wstring reason;
     int exitCode = 0;
+    bool timedOut = false;
 };
 
 struct CapabilityCacheEntry {
@@ -66,6 +72,9 @@ struct CapabilityCacheEntry {
     std::wstring reason;
     std::wstring ttlOrExpiration;
     long long expiresAtUnix = 0;
+    long long positiveTtlSeconds = kDefaultPositiveCacheTtlSeconds;
+    long long negativeTtlSeconds = kDefaultNegativeCacheTtlSeconds;
+    bool timedOut = false;
     std::wstring desktopVisualVersion;
     std::wstring cachePath;
 };
@@ -73,6 +82,10 @@ struct CapabilityCacheEntry {
 struct CapabilityResolution {
     CapabilityCacheEntry entry;
     bool cacheHit = false;
+    bool probeAttempted = false;
+    bool hasProbeMs = false;
+    unsigned long long probeMs = 0;
+    std::wstring cacheState = L"not_checked";
     std::wstring cachePath;
     bool cacheWriteOk = true;
     std::wstring cacheWriteError;
@@ -84,9 +97,12 @@ struct AssistLocateArgs {
     std::wstring imagePath;
     std::wstring target;
     std::wstring targetWindowTitle;
-    int timeoutMs = 60000;
+    int timeoutMs = kDefaultVlmInferenceTimeoutMs;
+    int probeTimeoutMs = kDefaultCapabilityProbeTimeoutMs;
     double minConfidence = 0.65;
     bool cache = true;
+    long long ttlSeconds = kDefaultPositiveCacheTtlSeconds;
+    long long negativeTtlSeconds = kDefaultNegativeCacheTtlSeconds;
     std::wstring simulation;
     std::wstring capabilitySimulation;
     std::wstring screenshotId;
@@ -140,6 +156,9 @@ struct ProviderLocateResult {
     std::wstring parsedJsonPath;
     std::wstring reason;
     int exitCode = 0;
+    bool timedOut = false;
+    bool hasExecMs = false;
+    unsigned long long execMs = 0;
 };
 
 struct CandidateValidateArgs {
@@ -409,6 +428,33 @@ unsigned long long DurationMsSince(ULONGLONG startTick) {
     return static_cast<unsigned long long>(now - startTick);
 }
 
+std::wstring ToLowerInvariant(std::wstring value);
+
+bool CapabilityIsAvailable(const std::wstring& status) {
+    return status == kCapabilityAvailable;
+}
+
+bool CapabilityIsTimeoutLike(const std::wstring& status, const std::wstring& reason) {
+    std::wstring lowerReason = ToLowerInvariant(reason);
+    return status == kCapabilityTimeout || lowerReason.find(L"timed out") != std::wstring::npos || lowerReason.find(L"timeout") != std::wstring::npos;
+}
+
+std::wstring CapabilityCacheState(bool cacheEnabled, bool cacheHit, const std::wstring& status) {
+    if (!cacheEnabled) return L"disabled";
+    bool positive = CapabilityIsAvailable(status);
+    if (cacheHit) return positive ? L"positive_hit" : L"negative_hit";
+    return positive ? L"positive_miss_written" : L"negative_miss_written";
+}
+
+std::wstring CapabilitySkipReason(bool cacheHit, const std::wstring& status) {
+    if (!cacheHit) return L"";
+    return CapabilityIsAvailable(status) ? L"cache_positive_not_needed" : L"cache_negative";
+}
+
+std::wstring NullOrJsonNumber(bool hasValue, unsigned long long value) {
+    return hasValue ? std::to_wstring(value) : L"null";
+}
+
 std::wstring TimestampForPath() {
     SYSTEMTIME t;
     GetLocalTime(&t);
@@ -445,14 +491,10 @@ std::wstring SanitizeId(const std::wstring& value) {
     return out;
 }
 
-std::wstring CodexVersionQuick() {
-    return Trim(RunCommandCapture(L"codex --version 2>NUL"));
-}
-
 std::wstring DefaultSessionId(const std::wstring& provider) {
     wchar_t user[256] = {};
     GetEnvironmentVariableW(L"USERNAME", user, static_cast<DWORD>(std::size(user)));
-    std::wstring basis = ProjectRootPath() + L"|" + user + L"|" + provider + L"|" + CodexVersionQuick() + L"|" + kBridgeDesktopVisualVersion;
+    std::wstring basis = ProjectRootPath() + L"|" + user + L"|" + provider + L"|" + kBridgeDesktopVisualVersion;
     return L"default-" + HexHash(basis);
 }
 
@@ -500,6 +542,9 @@ std::wstring CacheEntryJson(const CapabilityCacheEntry& entry) {
          << L",\"reason\":" << JsonString(entry.reason)
          << L",\"ttl_or_expiration\":" << JsonString(entry.ttlOrExpiration)
          << L",\"expires_at_unix\":" << entry.expiresAtUnix
+         << L",\"positive_ttl_seconds\":" << entry.positiveTtlSeconds
+         << L",\"negative_ttl_seconds\":" << entry.negativeTtlSeconds
+         << L",\"timed_out\":" << (entry.timedOut ? L"true" : L"false")
          << L",\"desktopvisual_version\":" << JsonString(entry.desktopVisualVersion)
          << L"}";
     return json.str();
@@ -525,6 +570,9 @@ bool ReadCacheEntry(const std::wstring& path, CapabilityCacheEntry& entry, std::
     entry.reason = simplejson::GetString(parsed.root, L"reason");
     entry.ttlOrExpiration = simplejson::GetString(parsed.root, L"ttl_or_expiration");
     entry.expiresAtUnix = static_cast<long long>(simplejson::GetInt(parsed.root, L"expires_at_unix", 0));
+    entry.positiveTtlSeconds = static_cast<long long>(simplejson::GetInt(parsed.root, L"positive_ttl_seconds", static_cast<int>(kDefaultPositiveCacheTtlSeconds)));
+    entry.negativeTtlSeconds = static_cast<long long>(simplejson::GetInt(parsed.root, L"negative_ttl_seconds", static_cast<int>(kDefaultNegativeCacheTtlSeconds)));
+    entry.timedOut = simplejson::GetBool(parsed.root, L"timed_out", CapabilityIsTimeoutLike(entry.capabilityStatus, entry.reason));
     entry.desktopVisualVersion = simplejson::GetString(parsed.root, L"desktopvisual_version");
     entry.cachePath = path;
     entry.valid = !entry.sessionId.empty() && !entry.provider.empty() && !entry.capabilityStatus.empty();
@@ -533,13 +581,13 @@ bool ReadCacheEntry(const std::wstring& path, CapabilityCacheEntry& entry, std::
 
 std::wstring CacheOutputJson(
     const CapabilityProbeArgs& args,
-    const CapabilityCacheEntry& entry,
-    bool cacheHit,
-    const std::wstring& cachePath,
-    bool cacheWriteOk,
-    const std::wstring& cacheWriteError,
+    const CapabilityResolution& resolution,
     ULONGLONG startTick) {
+    const CapabilityCacheEntry& entry = resolution.entry;
     unsigned long long durationMs = DurationMsSince(startTick);
+    bool unavailable = !CapabilityIsAvailable(entry.capabilityStatus);
+    bool timedOut = entry.timedOut || CapabilityIsTimeoutLike(entry.capabilityStatus, entry.reason);
+    std::wstring skipReason = CapabilitySkipReason(resolution.cacheHit, entry.capabilityStatus);
     std::wstringstream json;
     json << L"{"
          << L"\"ok\":true"
@@ -550,11 +598,29 @@ std::wstring CacheOutputJson(
          << L",\"provider\":" << JsonString(args.provider)
          << L",\"session_id\":" << JsonString(entry.sessionId)
          << L",\"capability_status\":" << JsonString(entry.capabilityStatus)
-         << L",\"cache_hit\":" << (cacheHit ? L"true" : L"false")
+         << L",\"cache_hit\":" << (resolution.cacheHit ? L"true" : L"false")
+         << L",\"vlm_probe_attempted\":" << (resolution.probeAttempted ? L"true" : L"false")
+         << L",\"vlm_probe_ms\":" << NullOrJsonNumber(resolution.hasProbeMs, resolution.probeMs)
+         << L",\"vlm_cache_hit\":" << (resolution.cacheHit ? L"true" : L"false")
+         << L",\"vlm_cache_state\":" << JsonString(resolution.cacheState)
+         << L",\"vlm_provider_startup_ms\":null"
+         << L",\"vlm_exec_ms\":null"
+         << L",\"vlm_total_ms\":" << durationMs
+         << L",\"vlm_unavailable\":" << (unavailable ? L"true" : L"false")
+         << L",\"vlm_timeout\":" << (timedOut ? L"true" : L"false")
+         << L",\"vlm_required\":true"
+         << L",\"vlm_assist_allowed\":false"
+         << L",\"vlm_used_for_action\":false"
+         << L",\"vlm_degraded_to_runtime_only\":" << (unavailable ? L"true" : L"false")
+         << L",\"vlm_probe_reason\":" << (resolution.probeAttempted ? JsonString(L"vlm_required") : L"null")
+         << L",\"vlm_skip_reason\":" << (skipReason.empty() ? L"null" : JsonString(skipReason))
+         << L",\"probe_timeout_ms\":" << args.timeoutMs
+         << L",\"positive_ttl_seconds\":" << args.ttlSeconds
+         << L",\"negative_ttl_seconds\":" << args.negativeTtlSeconds
          << L",\"cache_enabled\":" << (args.cache ? L"true" : L"false")
-         << L",\"cache_path\":" << JsonString(cachePath)
-         << L",\"cache_write_ok\":" << (cacheWriteOk ? L"true" : L"false")
-         << L",\"cache_write_error\":" << JsonString(cacheWriteError)
+         << L",\"cache_path\":" << JsonString(resolution.cachePath)
+         << L",\"cache_write_ok\":" << (resolution.cacheWriteOk ? L"true" : L"false")
+         << L",\"cache_write_error\":" << JsonString(resolution.cacheWriteError)
          << L",\"provider_command\":" << JsonString(entry.providerCommand)
          << L",\"codex_cli_version\":" << JsonString(entry.codexCliVersion)
          << L",\"checked_at\":" << JsonString(entry.checkedAt)
@@ -571,22 +637,30 @@ std::wstring CacheOutputJson(
          << L"\"provider\":" << JsonString(args.provider)
          << L",\"session_id\":" << JsonString(entry.sessionId)
          << L",\"capability_status\":" << JsonString(entry.capabilityStatus)
-         << L",\"cache_hit\":" << (cacheHit ? L"true" : L"false")
+         << L",\"cache_hit\":" << (resolution.cacheHit ? L"true" : L"false")
+         << L",\"vlm_probe_attempted\":" << (resolution.probeAttempted ? L"true" : L"false")
+         << L",\"vlm_cache_state\":" << JsonString(resolution.cacheState)
+         << L",\"vlm_unavailable\":" << (unavailable ? L"true" : L"false")
+         << L",\"vlm_timeout\":" << (timedOut ? L"true" : L"false")
+         << L",\"vlm_degraded_to_runtime_only\":" << (unavailable ? L"true" : L"false")
          << L",\"cache_enabled\":" << (args.cache ? L"true" : L"false")
          << L",\"image_input_supported\":" << (entry.imageInputSupported ? L"true" : L"false")
          << L",\"codex_cli_version\":" << JsonString(entry.codexCliVersion)
          << L",\"reason\":" << JsonString(entry.reason)
          << L"}"
          << L",\"evidence\":{"
-         << L"\"cache_path\":" << JsonString(cachePath)
-         << L",\"cache_write_ok\":" << (cacheWriteOk ? L"true" : L"false")
-         << L",\"cache_write_error\":" << JsonString(cacheWriteError)
+         << L"\"cache_path\":" << JsonString(resolution.cachePath)
+         << L",\"cache_write_ok\":" << (resolution.cacheWriteOk ? L"true" : L"false")
+         << L",\"cache_write_error\":" << JsonString(resolution.cacheWriteError)
          << L",\"probe_image_path\":" << JsonString(entry.probeImagePath)
          << L",\"raw_probe_output_path\":" << JsonString(entry.rawProbeOutputPath)
          << L",\"raw_probe_output_path_exists\":" << (FileExists(entry.rawProbeOutputPath) ? L"true" : L"false")
          << L",\"provider_command\":" << JsonString(entry.providerCommand)
          << L",\"checked_at\":" << JsonString(entry.checkedAt)
          << L",\"ttl_or_expiration\":" << JsonString(entry.ttlOrExpiration)
+         << L",\"probe_timeout_ms\":" << args.timeoutMs
+         << L",\"positive_ttl_seconds\":" << args.ttlSeconds
+         << L",\"negative_ttl_seconds\":" << args.negativeTtlSeconds
          << L"}"
          << L"}";
     return json.str();
@@ -618,7 +692,8 @@ bool ParseCapabilityProbeArgs(int argc, wchar_t** argv, CapabilityProbeArgs& arg
     }
     if (!ParseIntArg(argc, argv, L"--timeout-ms", args.timeoutMs, error) ||
         !ParseBoolArg(argc, argv, L"--cache", args.cache, error) ||
-        !ParseInt64Arg(argc, argv, L"--ttl-seconds", args.ttlSeconds, error)) {
+        !ParseInt64Arg(argc, argv, L"--ttl-seconds", args.ttlSeconds, error) ||
+        !ParseInt64Arg(argc, argv, L"--negative-ttl-seconds", args.negativeTtlSeconds, error)) {
         return false;
     }
     if (args.provider.empty()) {
@@ -639,6 +714,10 @@ bool ParseCapabilityProbeArgs(int argc, wchar_t** argv, CapabilityProbeArgs& arg
         error = L"--ttl-seconds must be positive.";
         return false;
     }
+    if (args.negativeTtlSeconds <= 0) {
+        error = L"--negative-ttl-seconds must be positive.";
+        return false;
+    }
     return true;
 }
 
@@ -653,8 +732,11 @@ bool ParseAssistLocateArgs(int argc, wchar_t** argv, AssistLocateArgs& args, std
     ArgValue(argc, argv, L"--screenshot-id", args.screenshotId);
     ArgValue(argc, argv, L"--frame-id", args.frameId);
     if (!ParseIntArg(argc, argv, L"--timeout-ms", args.timeoutMs, error) ||
+        !ParseIntArg(argc, argv, L"--probe-timeout-ms", args.probeTimeoutMs, error) ||
         !ParseDoubleArg(argc, argv, L"--min-confidence", args.minConfidence, error) ||
-        !ParseBoolArg(argc, argv, L"--cache", args.cache, error)) {
+        !ParseBoolArg(argc, argv, L"--cache", args.cache, error) ||
+        !ParseInt64Arg(argc, argv, L"--ttl-seconds", args.ttlSeconds, error) ||
+        !ParseInt64Arg(argc, argv, L"--negative-ttl-seconds", args.negativeTtlSeconds, error)) {
         return false;
     }
     if (args.provider.empty()) {
@@ -674,6 +756,18 @@ bool ParseAssistLocateArgs(int argc, wchar_t** argv, AssistLocateArgs& args, std
     }
     if (args.timeoutMs <= 0) {
         error = L"--timeout-ms must be positive.";
+        return false;
+    }
+    if (args.probeTimeoutMs <= 0) {
+        error = L"--probe-timeout-ms must be positive.";
+        return false;
+    }
+    if (args.ttlSeconds <= 0) {
+        error = L"--ttl-seconds must be positive.";
+        return false;
+    }
+    if (args.negativeTtlSeconds <= 0) {
+        error = L"--negative-ttl-seconds must be positive.";
         return false;
     }
     if (args.minConfidence < 0.0 || args.minConfidence > 1.0) {
@@ -942,6 +1036,7 @@ ProviderProbeResult RunProviderProbe(const CapabilityProbeArgs& args, const std:
     result.wrapperOk = simplejson::GetBool(parsed.root, L"ok", false);
     result.status = simplejson::GetString(parsed.root, L"provider_status", kCapabilityUnknown);
     if (result.status == kCapabilityTimeout) {
+        result.timedOut = true;
         result.status = kCapabilityUnavailable;
         result.reason = L"provider timed out";
     }
@@ -980,13 +1075,20 @@ CapabilityResolution ResolveCapability(const CapabilityProbeArgs& args) {
             cached.expiresAtUnix > now) {
             resolution.entry = cached;
             resolution.cacheHit = true;
+            resolution.probeAttempted = false;
+            resolution.cacheState = CapabilityCacheState(args.cache, true, cached.capabilityStatus);
             return resolution;
         }
     }
 
     std::wstring rawOutputPath = RawProbeOutputPath(args.provider, args.sessionId);
+    ULONGLONG probeStart = GetTickCount64();
+    resolution.probeAttempted = true;
     ProviderProbeResult provider = RunProviderProbe(args, rawOutputPath);
+    resolution.probeMs = DurationMsSince(probeStart);
+    resolution.hasProbeMs = true;
     resolution.entry = EntryFromProviderResult(args, provider, now, resolution.cachePath);
+    resolution.cacheState = CapabilityCacheState(args.cache, false, resolution.entry.capabilityStatus);
     if (args.cache) {
         resolution.cacheWriteOk = VLMWriteTextFile(resolution.cachePath, CacheEntryJson(resolution.entry), resolution.cacheWriteError);
     }
@@ -1004,20 +1106,22 @@ CapabilityCacheEntry EntryFromProviderResult(
     entry.provider = args.provider;
     entry.providerCommand = ProviderCommandDescription();
     entry.codexCliVersion = provider.codexCliVersion;
-    if (entry.codexCliVersion.empty() && args.provider == L"codex-cli") {
-        entry.codexCliVersion = CodexVersionQuick();
-    }
     entry.capabilityStatus = provider.status.empty() ? kCapabilityUnknown : provider.status;
     if (entry.capabilityStatus == kCapabilityTimeout) {
         entry.capabilityStatus = kCapabilityUnavailable;
+        entry.timedOut = true;
     }
+    entry.timedOut = entry.timedOut || provider.timedOut || CapabilityIsTimeoutLike(provider.status, provider.reason);
     entry.checkedAt = NowTimestamp();
     entry.imageInputSupported = provider.imageInputSupported;
     entry.probeImagePath = args.probeImage;
     entry.rawProbeOutputPath = provider.rawOutputPath;
     entry.reason = provider.reason;
-    entry.expiresAtUnix = now + args.ttlSeconds;
-    entry.ttlOrExpiration = L"ttl_seconds=" + std::to_wstring(args.ttlSeconds) + L";expires_at_unix=" + std::to_wstring(entry.expiresAtUnix);
+    entry.positiveTtlSeconds = args.ttlSeconds;
+    entry.negativeTtlSeconds = args.negativeTtlSeconds;
+    long long selectedTtlSeconds = CapabilityIsAvailable(entry.capabilityStatus) ? args.ttlSeconds : args.negativeTtlSeconds;
+    entry.expiresAtUnix = now + selectedTtlSeconds;
+    entry.ttlOrExpiration = L"ttl_seconds=" + std::to_wstring(selectedTtlSeconds) + L";expires_at_unix=" + std::to_wstring(entry.expiresAtUnix);
     entry.desktopVisualVersion = kBridgeDesktopVisualVersion;
     entry.cachePath = cachePath;
     return entry;
@@ -1033,7 +1137,10 @@ ProviderLocateResult RunProviderLocate(const AssistLocateArgs& args, const std::
         result.imageInputSupported = false;
         return result;
     }
+    ULONGLONG execStart = GetTickCount64();
     std::wstring wrapperOutput = Trim(RunCommandCapture(BuildWrapperLocateCommand(args, rawOutputPath)));
+    result.execMs = DurationMsSince(execStart);
+    result.hasExecMs = true;
     result.wrapperJson = wrapperOutput;
     simplejson::ParseResult parsed = simplejson::Parse(wrapperOutput);
     if (!parsed.ok || !parsed.root.IsObject()) {
@@ -1043,6 +1150,9 @@ ProviderLocateResult RunProviderLocate(const AssistLocateArgs& args, const std::
     }
     result.wrapperOk = simplejson::GetBool(parsed.root, L"ok", false);
     result.status = simplejson::GetString(parsed.root, L"provider_status", kCapabilityUnknown);
+    if (result.status == kCapabilityTimeout) {
+        result.timedOut = true;
+    }
     result.codexCliVersion = simplejson::GetString(parsed.root, L"codex_cli_version");
     result.imageInputSupported = simplejson::GetBool(parsed.root, L"image_input_supported", false);
     result.rawOutputPath = simplejson::GetString(parsed.root, L"raw_output_path", rawOutputPath);
@@ -1097,18 +1207,42 @@ std::wstring AssistLocateOutputJson(
         if (effectiveErrorCode == L"timeout") effectiveErrorCode = kCapabilityTimeout;
     }
     std::wstring reason = candidate.reason.empty() ? provider.reason : candidate.reason;
+    unsigned long long durationMs = DurationMsSince(startTick);
+    std::wstring effectiveStatus = !vlmStatus.empty() ? vlmStatus : capability.entry.capabilityStatus;
+    bool providerUnavailable = !provider.status.empty() && !CapabilityIsAvailable(provider.status);
+    bool capabilityUnavailable = !CapabilityIsAvailable(capability.entry.capabilityStatus);
+    bool unavailable = capabilityUnavailable || providerUnavailable || effectiveStatus == kCapabilityUnavailable || effectiveStatus == kCapabilityInvalidResponse || effectiveStatus == kCapabilityTimeout;
+    bool timedOut = capability.entry.timedOut || provider.timedOut || CapabilityIsTimeoutLike(effectiveStatus, provider.reason) || CapabilityIsTimeoutLike(capability.entry.capabilityStatus, capability.entry.reason);
+    std::wstring skipReason = CapabilitySkipReason(capability.cacheHit, capability.entry.capabilityStatus);
     std::wstringstream json;
     json << L"{"
          << L"\"ok\":" << (validation.accepted ? L"true" : L"false")
          << L",\"command\":\"vlm-assist-locate\""
          << L",\"timestamp\":" << JsonString(NowTimestamp())
-         << L",\"duration_ms\":" << DurationMsSince(startTick)
+         << L",\"duration_ms\":" << durationMs
          << L",\"error_code\":" << JsonString(effectiveErrorCode)
          << L",\"provider\":" << JsonString(args.provider)
          << L",\"session_id\":" << JsonString(args.sessionId)
          << L",\"vlm_status\":" << JsonString(vlmStatus)
          << L",\"capability_status\":" << JsonString(capability.entry.capabilityStatus)
          << L",\"capability_cache_hit\":" << (capability.cacheHit ? L"true" : L"false")
+         << L",\"vlm_probe_attempted\":" << (capability.probeAttempted ? L"true" : L"false")
+         << L",\"vlm_probe_ms\":" << NullOrJsonNumber(capability.hasProbeMs, capability.probeMs)
+         << L",\"vlm_cache_hit\":" << (capability.cacheHit ? L"true" : L"false")
+         << L",\"vlm_cache_state\":" << JsonString(capability.cacheState)
+         << L",\"vlm_provider_startup_ms\":null"
+         << L",\"vlm_exec_ms\":" << NullOrJsonNumber(provider.hasExecMs, provider.execMs)
+         << L",\"vlm_total_ms\":" << durationMs
+         << L",\"vlm_unavailable\":" << (unavailable ? L"true" : L"false")
+         << L",\"vlm_timeout\":" << (timedOut ? L"true" : L"false")
+         << L",\"vlm_required\":false"
+         << L",\"vlm_assist_allowed\":true"
+         << L",\"vlm_used_for_action\":false"
+         << L",\"vlm_degraded_to_runtime_only\":" << (unavailable ? L"true" : L"false")
+         << L",\"vlm_probe_reason\":" << (capability.probeAttempted ? JsonString(L"vlm_assist_allowed") : L"null")
+         << L",\"vlm_skip_reason\":" << (skipReason.empty() ? L"null" : JsonString(skipReason))
+         << L",\"probe_timeout_ms\":" << args.probeTimeoutMs
+         << L",\"actual_inference_timeout_ms\":" << args.timeoutMs
          << L",\"raw_response_path\":" << JsonString(provider.rawOutputPath)
          << L",\"parsed_json_path\":" << JsonString(parsedJsonPath)
          << L",\"image_path\":" << JsonString(args.imagePath)
@@ -1145,6 +1279,11 @@ std::wstring AssistLocateOutputJson(
          << L",\"session_id\":" << JsonString(args.sessionId)
          << L",\"vlm_status\":" << JsonString(vlmStatus)
          << L",\"capability_status\":" << JsonString(capability.entry.capabilityStatus)
+         << L",\"vlm_probe_attempted\":" << (capability.probeAttempted ? L"true" : L"false")
+         << L",\"vlm_cache_hit\":" << (capability.cacheHit ? L"true" : L"false")
+         << L",\"vlm_cache_state\":" << JsonString(capability.cacheState)
+         << L",\"vlm_unavailable\":" << (unavailable ? L"true" : L"false")
+         << L",\"vlm_degraded_to_runtime_only\":" << (unavailable ? L"true" : L"false")
          << L",\"raw_response_path\":" << JsonString(provider.rawOutputPath)
          << L",\"parsed_json_path\":" << JsonString(parsedJsonPath)
          << L",\"candidate_accepted\":" << (validation.accepted ? L"true" : L"false")
@@ -1169,6 +1308,9 @@ std::wstring AssistLocateOutputJson(
          << L",\"candidate_rejected_reason\":" << JsonString(candidateRejectedReason)
          << L",\"vlm_status\":" << JsonString(vlmStatus)
          << L",\"capability_status\":" << JsonString(capability.entry.capabilityStatus)
+         << L",\"vlm_probe_attempted\":" << (capability.probeAttempted ? L"true" : L"false")
+         << L",\"vlm_cache_hit\":" << (capability.cacheHit ? L"true" : L"false")
+         << L",\"vlm_cache_state\":" << JsonString(capability.cacheState)
          << L",\"provider_reason\":" << JsonString(provider.reason)
          << L",\"target_window_title\":" << JsonString(args.targetWindowTitle)
          << L"}"
@@ -1288,29 +1430,8 @@ int CommandVlmCapabilityProbe(int argc, wchar_t** argv) {
     EnsureDirectoryPath(DevArtifactRoot());
     EnsureDirectoryPath(DevArtifactRoot() + L"\\provider_raw_output_samples");
 
-    std::wstring cachePath = CapabilityCachePath(args.provider, args.sessionId);
-    long long now = UnixNow();
-    if (args.cache && FileExists(cachePath)) {
-        CapabilityCacheEntry cached;
-        std::wstring cacheError;
-        if (ReadCacheEntry(cachePath, cached, cacheError) &&
-            cached.provider == args.provider &&
-            cached.sessionId == args.sessionId &&
-            cached.expiresAtUnix > now) {
-            std::wcout << CacheOutputJson(args, cached, true, cachePath, true, L"", startTick) << L"\n";
-            return 0;
-        }
-    }
-
-    std::wstring rawOutputPath = RawProbeOutputPath(args.provider, args.sessionId);
-    ProviderProbeResult provider = RunProviderProbe(args, rawOutputPath);
-    CapabilityCacheEntry entry = EntryFromProviderResult(args, provider, now, cachePath);
-    std::wstring writeError;
-    bool writeOk = true;
-    if (args.cache) {
-        writeOk = VLMWriteTextFile(cachePath, CacheEntryJson(entry), writeError);
-    }
-    std::wcout << CacheOutputJson(args, entry, false, cachePath, writeOk, writeError, startTick) << L"\n";
+    CapabilityResolution resolution = ResolveCapability(args);
+    std::wcout << CacheOutputJson(args, resolution, startTick) << L"\n";
     return 0;
 }
 
@@ -1343,8 +1464,10 @@ int CommandVlmAssistLocate(int argc, wchar_t** argv) {
     CapabilityProbeArgs capArgs;
     capArgs.provider = args.provider;
     capArgs.sessionId = args.sessionId;
-    capArgs.timeoutMs = args.timeoutMs;
+    capArgs.timeoutMs = args.probeTimeoutMs;
     capArgs.cache = args.cache;
+    capArgs.ttlSeconds = args.ttlSeconds;
+    capArgs.negativeTtlSeconds = args.negativeTtlSeconds;
     capArgs.probeImage = ArtifactsPath(L"vlm_capability_probe\\vlm_probe_image.png");
     if (!FileExists(capArgs.probeImage)) capArgs.probeImage = args.imagePath;
     capArgs.simulation = args.capabilitySimulation;

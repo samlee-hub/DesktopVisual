@@ -1,0 +1,23 @@
+case_version=2
+# DPI coordinate mapping regression - minimal reproducible case
+#
+# Bug: on a 150% display the global capture frame is 2560x1600 physical pixels while the
+# winagent screen-coordinate space is 1707x1067 logical DIPs. coordinate-map never applies
+# the device scale factor, so the mapping degenerates to identity and dpi_scale is stuck at 1.
+#   src/winagent/ScreenshotCoordinateMapper.cpp:67-76  map_global_pixel_to_screen_coord does no /dpiScale
+#   src/winagent/ScreenshotCoordinateMapper.cpp:89-98  map_screen_coord_to_global_pixel does no *dpiScale
+#   src/winagent/WinAgent.cpp:9042-9055                mappingInput.dpiScale is never assigned
+#
+# A .case cannot invoke coordinate-map (CaseRunner.cpp:1001-1538 has no such step), so the
+# mapping JSON is produced by one documented command before this case runs:
+#   bin\winagent.exe coordinate-map --capture-scope global_desktop --capture-left 0 --capture-top 0
+#     --capture-width 2560 --capture-height 1600 --pixel-x 1280 --pixel-y 800
+#     > artifacts\dpi_coordinate_map_actual.json
+# dpi_coordinate_mapping_mismatch.ps1 performs that step and then runs this case.
+#
+# Bug present today -> dpi_scale 1, screen_x 1280, screen_y 800  -> first step ASSERTION_FAILED
+# Fixed            -> dpi_scale 1.5, screen_x 853, screen_y 533  -> all steps PASS
+
+assert_file_contains path="D:\desktopvisual\artifacts\dpi_coordinate_map_actual.json" text="\"dpi_scale\":1.5"
+assert_file_contains path="D:\desktopvisual\artifacts\dpi_coordinate_map_actual.json" text="\"screen_x\":853"
+assert_file_contains path="D:\desktopvisual\artifacts\dpi_coordinate_map_actual.json" text="\"screen_y\":533"

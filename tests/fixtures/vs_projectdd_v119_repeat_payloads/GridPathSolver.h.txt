@@ -1,0 +1,4 @@
+#pragma once
+#include <utility>
+#include <vector>
+bool GridPathSolver_solve(const std::vector<std::vector<int>>& grid, int& maxReward, std::vector<std::pair<int, int>>& path);

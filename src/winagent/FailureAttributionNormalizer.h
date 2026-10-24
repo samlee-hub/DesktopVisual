@@ -17,6 +17,7 @@ struct FailureAttributionNormalizationResult {
     bool rawCompletedUnverified = false;
     bool unknownMappedToSuccess = false;
     bool successWithoutFailure = false;
+    std::wstring failureClass;
     std::wstring dataJson;
 };
 

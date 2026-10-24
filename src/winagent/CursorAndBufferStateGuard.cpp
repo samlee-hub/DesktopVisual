@@ -1,5 +1,6 @@
 #include "CursorAndBufferStateGuard.h"
 
+#include "CoreWaitState.h"
 #include "OcrController.h"
 #include "SimpleJson.h"
 
@@ -53,8 +54,23 @@ bool VisibleTextContainsCodeResidue(const std::wstring& text) {
 }
 
 bool VerifyVisibleBufferCleared(HWND hwnd, CursorAndBufferStateGuardResult& result) {
-    Sleep(250);
-    OcrResult visible = ReadWindowText(hwnd, L"");
+    OcrResult visible;
+    bool sawVisibleResult = false;
+    CoreWaitStateOptions waitOptions;
+    waitOptions.waitSite = L"CursorAndBufferStateGuard.WaitUntilCaretOrBufferStable";
+    waitOptions.waitReason = L"visible_buffer_clear_verification_stable";
+    waitOptions.waitBudgetMs = 250;
+    waitOptions.waitPollIntervalMs = 40;
+    waitOptions.waitReplacedFromSleepMs = 250;
+    result.bufferStabilizationWait = WaitUntilCaretOrBufferStable(waitOptions, [hwnd, &visible, &sawVisibleResult]() {
+        visible = ReadWindowText(hwnd, L"");
+        sawVisibleResult = true;
+        return visible.ok && !VisibleTextContainsCodeResidue(visible.fullText);
+    });
+    result.hasBufferStabilizationWait = true;
+    if (!sawVisibleResult) {
+        visible = ReadWindowText(hwnd, L"");
+    }
     if (!visible.ok) {
         result.ok = false;
         result.errorCode = L"BLOCKED_BUFFER_CLEAR_VISIBLE_VERIFICATION_UNAVAILABLE";
@@ -184,6 +200,9 @@ std::wstring CursorAndBufferStateGuardResultJson(const CursorAndBufferStateGuard
     json += L",\"visible_verification_required\":" + simplejson::Bool(result.visibleVerificationRequired);
     json += L",\"clear_strategy\":" + simplejson::Quote(result.clearStrategy);
     json += L",\"keyboard_send_batch_count\":" + std::to_wstring(result.keyboardSendBatchCount);
+    json += L",\"has_buffer_stabilization_wait\":" + simplejson::Bool(result.hasBufferStabilizationWait);
+    json += L",\"buffer_stabilization_wait\":";
+    json += result.hasBufferStabilizationWait ? CoreWaitStateResultJson(result.bufferStabilizationWait) : L"null";
     json += L",\"key_sequence\":[";
     for (size_t i = 0; i < result.keySequence.size(); ++i) {
         if (i) json += L",";

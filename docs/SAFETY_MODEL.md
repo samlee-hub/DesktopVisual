@@ -1,8 +1,29 @@
 ﻿# DesktopVisual Safety Model
 
-Current version: `v4.7.0`.
+Current version: `v1.1.4`.
+Current version line: `v1.1.x`.
+Current contract: `..\CURRENT_EXECUTION_CONTRACT.md`.
+Release channel details: `RELEASE_CHANNELS.md`.
 
 DesktopVisual is a local Windows desktop runtime with explicit permission profiles. DEFAULT remains the safe authorized-window runtime. FULL_ACCESS can widen the allowed task surface to normal user desktop, third-party apps, external web, communication, content decisions, cross-window work, and global desktop intent only when a temporary FULL_ACCESS session is active.
+
+## Current Safety Model Entry
+
+`CURRENT_EXECUTION_CONTRACT.md` is the highest-priority current safety and execution contract. `docs\RELEASE_CHANNELS.md` defines current tree and release channel semantics under that contract. Older v3/v4/v5/v6 safety sections below are historical lineage unless this current section explicitly keeps them active.
+
+The developer tree at `E:\desktopvisualproject\desktopvisual` keeps broad developer permissions. The current local-use / demo / testing release tree at `E:\desktopvisualproject\desktop_release` temporarily keeps the same permission semantics as the developer tree. The current `desktop_release` tree is not the final restricted public release.
+
+Keyword or category alone does not trigger STOP. Ordinary apps, ordinary webpages, HTTPS pages, localhost pages, local HTML pages, IDEs, Explorer, browsers, email, communication pages, code platforms, programming-practice pages, and broad words such as `test`, `exam`, `challenge`, `assessment`, `interview`, `contest`, and `submit` are not STOP or BLOCK reasons by themselves.
+
+Concrete active protection or security interception does trigger STOP. Examples include CAPTCHA, reCAPTCHA, hCaptcha, Turnstile, human verification, bot challenge, automation detected, script detected, credential handoff, account security verification, UAC/protected desktop, proctoring, lockdown browser, Secure Exam Browser, anti-cheat systems such as ACE, EasyAntiCheat, BattlEye, Vanguard, Xiao Lan Xiong, or equivalent active protection.
+
+Restricted public release hardening is future work only and may start only after the user explicitly requests a public restricted release or public restricted release permission reduction.
+
+v1.1.4 latency observability adds Runtime/report timing fields and first-action baseline evidence only. It does not change permission semantics, STOP boundaries, VLM provider strategy, VLM timeout, Sleep behavior, or release channel policy.
+
+## Historical Safety Model Lineage
+
+The sections below preserve older v3/v4/v5/v6 safety model evolution and command compatibility context. They are historical / lineage / archived information unless explicitly restated in `CURRENT_EXECUTION_CONTRACT.md`.
 
 ## Authorization Model
 
@@ -54,7 +75,7 @@ Each dogfood task declares a safety boundary, expected result, and SKIPPED condi
 
 v4.6.0 visual dogfood keeps the same boundary while requiring v4 perception evidence in each case. `local_mail_mock` is mock-only and must not send real email. `local_problem_page` is a development benchmark fixture and must not be treated as real exam, hiring-test, certification, proctored, rated-contest, or public assessment automation. Any blocked or unknown high-risk state must stop and be recorded.
 
-v4.7.0 release candidate checks verify the v4 evidence chain and public-release hygiene. They do not grant release permission by themselves. Public release must be prepared separately under `D:\desktopvisual-release` with restricted exam, interview assessment, hiring test, certification, proctored, rated-contest, game-cheat, captcha, anti-cheat, payment, credential, and account-security permissions.
+v4.7.0 release candidate checks verify the v4 evidence chain and historical public-release hygiene. They do not grant release permission by themselves. Any restricted public release described by v4.x is historical/future policy and does not apply to the current v1.1.x developer tree or current `desktop_release` local-use / demo / testing tree.
 
 ## Global Desktop And App Launch
 
@@ -103,7 +124,7 @@ v4.5.0 App Profiles are application adapters, not Permission Profiles. They can 
 
 Profiles cannot grant `FULL_ACCESS`, cannot unlock broad capabilities, cannot loosen `config\safety_manifest.json`, and cannot loosen `config\safety.conf`. `profile-report` exposes `effective_capabilities.can_override_safety_manifest=false`, and profile-derived locator metadata returns `action_gate="requires_runtime_safety_policy"`.
 
-Built-in profiles are local safe adapters only. The local problem and mail mock profiles are fixtures and are not real public assessment or real email profiles. Public release under `D:\desktopvisual-release` must keep restricted permissions for exam, interview assessment, hiring test, certification, rated-contest, proctored, and similar workflows.
+Built-in profiles are local safe adapters only. The local problem and mail mock profiles are fixtures and are not real public assessment or real email profiles. Future restricted public release policy may keep restricted permissions for exam, interview assessment, hiring test, certification, rated-contest, proctored, and similar workflows only after the user explicitly requests a restricted public release. That policy does not apply to the current v1.1.x developer tree or current `desktop_release` local-use / demo / testing tree.
 
 ## General Decision Tasks
 
@@ -168,19 +189,15 @@ Coding workflow rules are immutable:
 - Missing reliable code editor or Run Code control stops with `LOCATOR_NOT_FOUND`.
 - Submit requires `allow_submit=true`; otherwise the workflow stops before submit.
 
-The v3.3.9/v3.3.10 development runtime does not hard-stop solely on exam, assessment, hiring-test, certification, or rated-contest keywords because those categories are explicitly allowed by the stage 9 requirements when the user provides the task goal. Public releases must add an explicit permission layer for these categories before enabling them outside controlled local development. That release policy must not allow proctoring bypass, anti-cheat bypass, captcha bypass, credential handling, paid-limit bypass, batch submit, or problem-set scraping.
+The v3.3.9/v3.3.10 development runtime did not hard-stop solely on exam, assessment, hiring-test, certification, or rated-contest keywords because those categories were explicitly allowed by the stage 9 requirements when the user provided the task goal. Future restricted public releases may add an explicit permission layer for these categories only after the user explicitly requests restricted public release work. That future release policy must not allow proctoring bypass, anti-cheat bypass, captcha bypass, credential handling, paid-limit bypass, batch submit, or problem-set scraping.
 
 ## Local Development Versus Release Tree
 
-`D:\desktopvisual` is the local development and future evaluation tree. It may keep the broadest project permission surface for controlled local development tests, simulated-exam correctness evaluation, operation-accuracy evaluation, and future runtime optimization. This local posture does not remove immutable stops for credentials, captcha, payment, UAC, protected desktop, anti-cheat, anti-automation bypass, paid-limit bypass, batch submit, or problem-set scraping.
+`E:\desktopvisualproject\desktopvisual` is the current developer tree. It keeps broad developer permission semantics for authorized local development and testing.
 
-Public release must not be made by submitting `D:\desktopvisual` directly. A release candidate intended for publication must be prepared in:
+`E:\desktopvisualproject\desktop_release` is the current local-use / demo / testing release tree. During v1.1.1 through v1.1.7 it is not synchronized, and it temporarily keeps the same permission semantics as the developer tree. Synchronization is deferred until v1.2.0.
 
-```text
-D:\desktopvisual-release
-```
-
-The `D:\desktopvisual-release` tree must contain the restricted permission policy. Exam, interview assessment, hiring test, certification, rated-contest, proctored, and similar workflows must be disabled or gated by a dedicated permission model in that release tree before distribution.
+The current `desktop_release` tree is not the final restricted public release. A future restricted public release may be prepared only after the user explicitly requests public restricted release creation or permission reduction.
 
 ## Full Access Benchmark Evidence
 

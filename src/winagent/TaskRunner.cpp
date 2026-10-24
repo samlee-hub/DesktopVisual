@@ -2,6 +2,7 @@
 
 #include "CaseRunner.h"      // ReadTextFile, WriteUtf8TextFile
 #include "CodingWorkflow.h"
+#include "CoreWaitState.h"
 #include "DecisionEngine.h"
 #include "FormSemantics.h"
 #include "InputController.h"
@@ -545,6 +546,8 @@ bool ParseTaskJson(const std::wstring& content, TaskDefinition& task, std::wstri
     task.permissionMode = JsonGetString(json, L"permission_mode");
     if (task.permissionMode.empty()) task.permissionMode = DefaultPermissionModeName();
     task.fullAccessSessionId = JsonGetString(json, L"full_access_session_id");
+    task.verifyMode = JsonGetString(json, L"verify_mode");
+    if (task.verifyMode != L"agent") task.verifyMode = L"engine";
 
     std::wstring targetObj = JsonGetObject(json, L"target");
     task.target.title = JsonGetString(targetObj, L"title");
@@ -596,6 +599,7 @@ struct StepExecContext {
     std::wstring targetProcess;
     PermissionMode permissionMode = PermissionMode::DEFAULT;
     std::wstring fullAccessSessionId;
+    std::wstring verifyMode;
     TaskResult& result;
     TaskBudget& budget;
     int recoveryCount = 0;
@@ -635,7 +639,8 @@ void RecordRecoveryDecision(
     const RecoveryStrategy& strategy,
     int attempt,
     const std::wstring& recordResult,
-    const std::wstring& details) {
+    const std::wstring& details,
+    const CoreWaitStateResult* coreWait = nullptr) {
     RecoveryAttemptRecord record;
     record.stepIndex = stepIndex;
     record.stepName = stepName;
@@ -645,10 +650,18 @@ void RecordRecoveryDecision(
     record.result = recordResult;
     record.details = details;
     record.strategySteps = strategy.steps;
+    if (coreWait) {
+        record.hasCoreWait = true;
+        record.coreWait = *coreWait;
+    }
     result.recoveryAttempts.push_back(record);
     if (stepResult) {
         stepResult->recoveryAttempts.push_back(record);
     }
+}
+
+std::wstring CoreWaitDetail(const CoreWaitStateResult& wait) {
+    return L"; core_wait=" + CoreWaitStateResultJson(wait);
 }
 
 std::wstring SelectorValueAfterPrefix(const std::wstring& selector, const std::wstring& prefix) {
@@ -1423,6 +1436,28 @@ bool ExecuteHotkeyStep(StepExecContext& ctx, TaskStepResult& r, const TaskStep& 
 
 bool VerifyExpects(StepExecContext& ctx, TaskStepResult& r, const TaskStep& step) {
     if (!step.hasExpect) return true;
+    if (ctx.verifyMode == L"agent") {
+        // The engine executed the action and leaves every declared condition unevaluated.
+        // The calling agent evaluates them against the failure artifact instead of the
+        // engine's window-only text snapshot, which is unreliable for self-drawn UIs.
+        std::wstringstream dj;
+        dj << L"{\"deferred\":true,\"verify_mode\":\"agent\",\"conditions\":{";
+        bool firstCondition = true;
+        auto addCondition = [&dj, &firstCondition](const wchar_t* key, const std::wstring& value) {
+            if (!firstCondition) dj << L",";
+            firstCondition = false;
+            dj << L"\"" << key << L"\":" << JsonString(value);
+        };
+        if (!step.expectSelectorExists.empty()) addCondition(L"selector_exists", step.expectSelectorExists);
+        if (!step.expectTextContains.empty()) addCondition(L"text_contains", step.expectTextContains);
+        if (!step.expectFileContainsPath.empty()) addCondition(L"file_contains_path", step.expectFileContainsPath);
+        if (!step.expectFileContainsText.empty()) addCondition(L"file_contains_text", step.expectFileContainsText);
+        if (!step.expectWindowTitleContains.empty()) addCondition(L"window_title_contains", step.expectWindowTitleContains);
+        dj << L"}}";
+        r.expectResult = dj.str();
+        r.expectDeferred = true;
+        return true;
+    }
     if (!EnsureWindowSession(ctx, r)) return false;
     std::wstringstream expectJson;
     expectJson << L"{";
@@ -1534,6 +1569,8 @@ bool AttemptRecovery(
     r.failure.recoveryAttempted = attempt;
     std::wstring details;
     bool recovered = false;
+    CoreWaitStateResult coreWait;
+    bool hasCoreWait = false;
 
     if (strategy.strategyName == L"window_not_found_find_process_activate_stop") {
         WindowSessionResult session = ResolveWindowSession(ctx.targetTitle, ctx.targetProcess);
@@ -1552,7 +1589,13 @@ bool AttemptRecovery(
             details = L"target window/process still not found: " + session.errorCode;
         }
     } else if (strategy.strategyName == L"locator_not_found_reobserve_ocr_stop") {
-        Sleep(500);
+        coreWait = WaitUntilFrameOrFocusStable(
+            ctx.hwnd,
+            500,
+            L"TaskRunner.locator_not_found_reobserve_ocr_stop",
+            L"recover_before_reobserve",
+            500);
+        hasCoreWait = true;
         bool observed = ExecuteObserveStep(ctx, r);
         if (observed) {
             recovered = ExecuteLocateStep(ctx, r, step);
@@ -1578,7 +1621,20 @@ bool AttemptRecovery(
             }
         }
     } else if (strategy.strategyName == L"text_not_found_wait_reobserve_stop") {
-        Sleep(500);
+        CoreWaitStateOptions waitOptions;
+        waitOptions.waitSite = L"TaskRunner.text_not_found_wait_reobserve_stop";
+        waitOptions.waitReason = L"recover_until_expected_text_or_focus_stable";
+        waitOptions.waitBudgetMs = 500;
+        waitOptions.waitPollIntervalMs = 40;
+        waitOptions.waitReplacedFromSleepMs = 500;
+        coreWait = WaitForCoreState(waitOptions, [&ctx, &r, &step]() {
+            if (!step.hasExpect) {
+                return ctx.hwnd && IsWindow(ctx.hwnd) && GetForegroundWindow() == ctx.hwnd;
+            }
+            TaskStepResult probe = r;
+            return VerifyExpects(ctx, probe, step);
+        });
+        hasCoreWait = true;
         bool observed = ExecuteObserveStep(ctx, r);
         if (observed) {
             recovered = step.hasExpect ? VerifyExpects(ctx, r, step) : true;
@@ -1588,7 +1644,13 @@ bool AttemptRecovery(
         }
     } else if (originalFailure.safeRecoveryAction == L"retry_focus_once") {
         FocusTargetWindow(ctx.hwnd);
-        Sleep(500);
+        coreWait = WaitUntilFocusStable(
+            ctx.hwnd,
+            500,
+            L"TaskRunner.retry_focus_once",
+            L"recover_until_focus_stable",
+            500);
+        hasCoreWait = true;
         recovered = ExecuteObserveStep(ctx, r);
         details = recovered ? L"legacy focus retry succeeded" : L"legacy focus retry failed";
     } else if (originalFailure.safeRecoveryAction == L"fallback_to_uia_if_available") {
@@ -1602,7 +1664,20 @@ bool AttemptRecovery(
             details = L"legacy UIA fallback skipped because no text probe could be derived";
         }
     } else if (originalFailure.safeRecoveryAction == L"reobserve_and_reexpect_once") {
-        Sleep(500);
+        CoreWaitStateOptions waitOptions;
+        waitOptions.waitSite = L"TaskRunner.reobserve_and_reexpect_once";
+        waitOptions.waitReason = L"recover_until_expect_ready_or_focus_stable";
+        waitOptions.waitBudgetMs = 500;
+        waitOptions.waitPollIntervalMs = 40;
+        waitOptions.waitReplacedFromSleepMs = 500;
+        coreWait = WaitForCoreState(waitOptions, [&ctx, &r, &step]() {
+            if (!step.hasExpect) {
+                return ctx.hwnd && IsWindow(ctx.hwnd) && GetForegroundWindow() == ctx.hwnd;
+            }
+            TaskStepResult probe = r;
+            return VerifyExpects(ctx, probe, step);
+        });
+        hasCoreWait = true;
         if (ExecuteObserveStep(ctx, r)) {
             recovered = VerifyExpects(ctx, r, step);
             details = recovered ? L"legacy re-expect succeeded" : L"legacy re-expect failed";
@@ -1617,14 +1692,166 @@ bool AttemptRecovery(
         r.failure = originalFailure;
         r.failure.recoveryAttempted = attempt;
     }
-    RecordRecoveryDecision(ctx.result, &r, stepIndex, step.name, strategy, attempt, recovered ? L"recovered" : L"failed", details);
+    if (hasCoreWait) {
+        details += CoreWaitDetail(coreWait);
+    }
+    RecordRecoveryDecision(ctx.result, &r, stepIndex, step.name, strategy, attempt, recovered ? L"recovered" : L"failed", details, hasCoreWait ? &coreWait : nullptr);
     return recovered;
+}
+
+// ===================================================================
+// Structured report writer (JSON twin of the markdown report)
+// ===================================================================
+static std::wstring EmbedJsonW(const std::wstring& text) {
+    if (!text.empty() && text[0] == L'{' && text[text.size() - 1] == L'}') return text;
+    return JsonString(text);
+}
+
+static std::wstring JsonSiblingPathW(const std::wstring& mdPath) {
+    if (mdPath.size() > 3) {
+        wchar_t c0 = mdPath[mdPath.size() - 3];
+        wchar_t c1 = mdPath[mdPath.size() - 2];
+        wchar_t c2 = mdPath[mdPath.size() - 1];
+        if (c0 == L'.' && (c1 == L'm' || c1 == L'M') && (c2 == L'd' || c2 == L'D')) {
+            return mdPath.substr(0, mdPath.size() - 3) + L".json";
+        }
+    }
+    return mdPath + L".json";
+}
+
+static void WriteMvpReportJsonW(const std::wstring& jsonPath, const std::wstring& markdownPath, TaskResult& result) {
+    result.reportJsonPath = jsonPath;
+
+    std::wstring o = L"{";
+    auto member = [&o](const wchar_t* key, const std::wstring& value) {
+        o += JsonString(key);
+        o += L":";
+        o += value;
+        o += L",";
+    };
+
+    member(L"schema", JsonString(L"desktopvisual.run_task_report/1"));
+    member(L"task", JsonString(result.taskName));
+    member(L"ok", result.ok ? L"true" : L"false");
+    member(L"duration_ms", std::to_wstring(result.totalDurationMs));
+    member(L"target", JsonString(result.targetTitle));
+    member(L"permission_mode", JsonString(result.permissionMode));
+    member(L"steps_total", std::to_wstring(result.totalSteps));
+    member(L"steps_passed", std::to_wstring(result.passedSteps));
+    member(L"recoveries_used", std::to_wstring(result.recoveriesUsed));
+    member(L"max_recoveries_effective", std::to_wstring(result.maxRecoveriesEffective));
+    member(L"last_checkpoint_id", JsonString(result.lastCheckpointId));
+    member(L"report_md", JsonString(markdownPath));
+    member(L"verify_mode", JsonString(result.verifyMode));
+    {
+        int deferred = 0;
+        for (size_t i = 0; i < result.stepResults.size(); ++i) {
+            if (result.stepResults[i].expectDeferred) ++deferred;
+        }
+        member(L"deferred_expects", std::to_wstring(deferred));
+    }
+
+    {
+        std::wstring fe = L"{";
+        fe += JsonString(L"code"); fe += L":"; fe += JsonString(result.finalErrorCode); fe += L",";
+        fe += JsonString(L"message"); fe += L":"; fe += JsonString(result.finalErrorMessage); fe += L",";
+        fe += JsonString(L"recommendation"); fe += L":"; fe += JsonString(result.finalRecommendation);
+        fe += L"}";
+        member(L"final_error", fe);
+    }
+
+    {
+        std::wstring arr = L"[";
+        for (size_t i = 0; i < result.stepResults.size(); ++i) {
+            const TaskStepResult& s = result.stepResults[i];
+            if (i > 0) arr += L",";
+            arr += L"{";
+            arr += JsonString(L"index"); arr += L":"; arr += std::to_wstring(static_cast<int>(i + 1)); arr += L",";
+            arr += JsonString(L"name"); arr += L":"; arr += JsonString(s.stepName); arr += L",";
+            arr += JsonString(L"type"); arr += L":"; arr += JsonString(s.stepType); arr += L",";
+            arr += JsonString(L"ok"); arr += L":"; arr += (s.ok ? L"true" : L"false"); arr += L",";
+            arr += JsonString(L"duration_ms"); arr += L":"; arr += std::to_wstring(s.durationMs); arr += L",";
+            arr += JsonString(L"screenshot"); arr += L":"; arr += JsonString(s.screenshotPath); arr += L",";
+            arr += JsonString(L"recovered"); arr += L":"; arr += (s.recovered ? L"true" : L"false"); arr += L",";
+            arr += JsonString(L"expect_deferred"); arr += L":"; arr += (s.expectDeferred ? L"true" : L"false"); arr += L",";
+            arr += JsonString(L"locate"); arr += L":"; arr += EmbedJsonW(s.locateResult); arr += L",";
+            arr += JsonString(L"action"); arr += L":"; arr += EmbedJsonW(s.actionResult); arr += L",";
+            arr += JsonString(L"expect"); arr += L":"; arr += EmbedJsonW(s.expectResult); arr += L",";
+            arr += JsonString(L"failure"); arr += L":{";
+            arr += JsonString(L"code"); arr += L":"; arr += JsonString(s.failure.rawErrorCode); arr += L",";
+            arr += JsonString(L"message"); arr += L":"; arr += JsonString(s.failure.rawErrorMessage); arr += L",";
+            arr += JsonString(L"category"); arr += L":"; arr += std::to_wstring(static_cast<int>(s.failure.category)); arr += L",";
+            arr += JsonString(L"can_recover"); arr += L":"; arr += (s.failure.canRecover ? L"true" : L"false"); arr += L",";
+            arr += JsonString(L"recovery_attempted"); arr += L":"; arr += std::to_wstring(s.failure.recoveryAttempted); arr += L",";
+            arr += JsonString(L"recommended"); arr += L":"; arr += JsonString(s.failure.recommendedUserAction);
+            arr += L"}";
+            arr += L"}";
+        }
+        arr += L"]";
+        member(L"steps", arr);
+    }
+
+    {
+        std::wstring arr = L"[";
+        for (size_t i = 0; i < result.recoveryAttempts.size(); ++i) {
+            const RecoveryAttemptRecord& rec = result.recoveryAttempts[i];
+            if (i > 0) arr += L",";
+            arr += L"{";
+            arr += JsonString(L"error_code"); arr += L":"; arr += JsonString(rec.errorCode); arr += L",";
+            arr += JsonString(L"strategy"); arr += L":"; arr += JsonString(rec.strategyName); arr += L",";
+            arr += JsonString(L"attempt"); arr += L":"; arr += std::to_wstring(rec.attempt); arr += L",";
+            arr += JsonString(L"result"); arr += L":"; arr += JsonString(rec.result); arr += L",";
+            arr += JsonString(L"details"); arr += L":"; arr += JsonString(rec.details); arr += L",";
+            arr += JsonString(L"strategy_steps"); arr += L":"; arr += JsonStringArray(rec.strategySteps); arr += L",";
+            arr += JsonString(L"core_wait"); arr += L":"; arr += (rec.hasCoreWait ? EmbedJsonW(CoreWaitStateResultJson(rec.coreWait)) : L"{}");
+            arr += L"}";
+        }
+        arr += L"]";
+        member(L"recovery_records", arr);
+    }
+
+    {
+        std::wstring arr = L"[";
+        for (size_t i = 0; i < result.checkpoints.size(); ++i) {
+            const SessionCheckpoint& c = result.checkpoints[i];
+            if (i > 0) arr += L",";
+            arr += L"{";
+            arr += JsonString(L"checkpoint_id"); arr += L":"; arr += JsonString(c.checkpointId); arr += L",";
+            arr += JsonString(L"step_index"); arr += L":"; arr += std::to_wstring(c.stepIndex); arr += L",";
+            arr += JsonString(L"window_title"); arr += L":"; arr += JsonString(c.windowTitle); arr += L",";
+            arr += JsonString(L"process_name"); arr += L":"; arr += JsonString(c.processName); arr += L",";
+            arr += JsonString(L"screenshot_path"); arr += L":"; arr += JsonString(c.screenshotPath); arr += L",";
+            arr += JsonString(L"observed_summary"); arr += L":"; arr += JsonString(c.observedSummary); arr += L",";
+            arr += JsonString(L"recent_actions"); arr += L":"; arr += JsonStringArray(c.recentActions); arr += L",";
+            arr += JsonString(L"suggested_recovery_actions"); arr += L":"; arr += JsonStringArray(c.suggestedRecoveryActions);
+            arr += L"}";
+        }
+        arr += L"]";
+        member(L"checkpoints", arr);
+    }
+
+    member(L"screenshots", JsonStringArray(result.screenshots));
+    member(L"report_paths", JsonStringArray(result.reportPaths));
+
+    if (!o.empty() && o[o.size() - 1] == L',') o[o.size() - 1] = L'}';
+    else o += L'}';
+
+    // Write UTF-8 without a BOM so strict JSON parsers accept the file.
+    int need = WideCharToMultiByte(CP_UTF8, 0, o.c_str(), static_cast<int>(o.size()), nullptr, 0, nullptr, nullptr);
+    if (need <= 0) return;
+    std::string utf8(static_cast<size_t>(need), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, o.c_str(), static_cast<int>(o.size()), &utf8[0], need, nullptr, nullptr);
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, jsonPath.c_str(), L"wb") != 0 || !f) return;
+    fwrite(utf8.data(), 1, utf8.size(), f);
+    fclose(f);
 }
 
 // ===================================================================
 // MVP Report Writer
 // ===================================================================
-void WriteMvpReport(const std::wstring& reportPath, const TaskResult& result) {
+void WriteMvpReport(const std::wstring& reportPath, TaskResult& result) {
+    WriteMvpReportJsonW(JsonSiblingPathW(reportPath), reportPath, result);
     FILE* f = nullptr;
     if (_wfopen_s(&f, reportPath.c_str(), L"w, ccs=UTF-8") != 0 || !f) return;
 
@@ -1637,6 +1864,13 @@ void WriteMvpReport(const std::wstring& reportPath, const TaskResult& result) {
     fwprintf(f, L"- Steps: %d total, %d passed\n", result.totalSteps, result.passedSteps);
     fwprintf(f, L"- Recoveries: %d\n", result.recoveriesUsed);
     fwprintf(f, L"- Max recoveries effective: %d\n", result.maxRecoveriesEffective);
+    if (result.verifyMode == L"agent") {
+        int deferred = 0;
+        for (size_t i = 0; i < result.stepResults.size(); ++i) {
+            if (result.stepResults[i].expectDeferred) ++deferred;
+        }
+        fwprintf(f, L"- Verify mode: agent (%d deferred expect)\n", deferred);
+    }
     if (!result.ok) {
         fwprintf(f, L"- Final error: `%ls` - %ls\n", result.finalErrorCode.c_str(), result.finalErrorMessage.c_str());
     }
@@ -1683,6 +1917,9 @@ void WriteMvpReport(const std::wstring& reportPath, const TaskResult& result) {
         fwprintf(f, L"- attempt: %d\n", rec.attempt);
         fwprintf(f, L"- result: %ls\n", rec.result.c_str());
         fwprintf(f, L"- details: %ls\n", rec.details.c_str());
+        if (rec.hasCoreWait) {
+            fwprintf(f, L"- core_wait: %ls\n", CoreWaitStateResultJson(rec.coreWait).c_str());
+        }
         fwprintf(f, L"- strategy_steps: %ls\n", JsonStringArray(rec.strategySteps).c_str());
     }
 
@@ -1754,6 +1991,9 @@ void WriteMvpReport(const std::wstring& reportPath, const TaskResult& result) {
                 rec.result.c_str(),
                 rec.details.c_str(),
                 JsonStringArray(rec.strategySteps).c_str());
+            if (rec.hasCoreWait) {
+                fwprintf(f, L"- RecoveryCoreWait: %ls\n", CoreWaitStateResultJson(rec.coreWait).c_str());
+            }
         }
         if (r.recovered) fwprintf(f, L"- RECOVERED\n");
         fwprintf(f, L"\n");
@@ -1819,6 +2059,7 @@ TaskResult RunTask(
 
     result.taskName = task.name;
     result.targetTitle = task.target.title;
+    result.verifyMode = task.verifyMode;
     result.templateUsages = task.templateUsages;
     if (!requestedPermissionMode.empty()) task.permissionMode = requestedPermissionMode;
     if (!requestedFullAccessSessionId.empty()) task.fullAccessSessionId = requestedFullAccessSessionId;
@@ -1901,7 +2142,16 @@ TaskResult RunTask(
         bool recoveredInitialWindow = false;
         std::wstring details;
         if (strategy.canAttempt && task.budget.maxRecoveries > 0) {
-            Sleep(500);
+            CoreWaitStateOptions waitOptions;
+            waitOptions.waitSite = L"TaskRunner.initial_window_session";
+            waitOptions.waitReason = L"recover_until_target_window_resolvable";
+            waitOptions.waitBudgetMs = 500;
+            waitOptions.waitPollIntervalMs = 40;
+            waitOptions.waitReplacedFromSleepMs = 500;
+            CoreWaitStateResult initialWindowWait = WaitForCoreState(waitOptions, [&task]() {
+                WindowSessionResult probe = ResolveWindowSession(task.target.title, task.target.process);
+                return probe.ok;
+            });
             WindowSessionResult retriedSession = ResolveWindowSession(task.target.title, task.target.process);
             if (retriedSession.ok) {
                 ActionResult focused = FocusTargetWindow(retriedSession.session.window.hwnd);
@@ -1916,7 +2166,8 @@ TaskResult RunTask(
             } else {
                 details = L"initial window/process still not found: " + retriedSession.errorCode;
             }
-            RecordRecoveryDecision(result, nullptr, -1, L"initial_window_session", strategy, 1, recoveredInitialWindow ? L"recovered" : L"failed", details);
+            details += CoreWaitDetail(initialWindowWait);
+            RecordRecoveryDecision(result, nullptr, -1, L"initial_window_session", strategy, 1, recoveredInitialWindow ? L"recovered" : L"failed", details, &initialWindowWait);
         } else {
             RecordRecoveryDecision(result, nullptr, -1, L"initial_window_session", strategy, 0, L"not_attempted", strategy.stopReason);
         }
@@ -1940,6 +2191,7 @@ TaskResult RunTask(
         task.target.process,
         parsedMode,
         task.fullAccessSessionId,
+        task.verifyMode,
         result,
         task.budget,
         result.recoveriesUsed};

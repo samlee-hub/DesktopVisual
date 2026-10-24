@@ -1,10 +1,80 @@
-# DesktopVisual v1.1.0 - Public Release Permission Alignment, Agent Efficiency, and Release Tree Sync
+# DesktopVisual v1.2.0
 
-Current trusted version: `DesktopVisual 1.1.0` Public Release Permission Alignment, Agent Efficiency, and Release Tree Sync.
+DesktopVisual is a Windows-only visible desktop Runtime for authorized local UI testing and evidence.
+It is agent-agnostic and can be called by Codex, CLI agents, or human scripts.
+It uses visible-first mouse/keyboard workflows, observation, bounded recovery, and audit artifacts.
+It is not the official built-in Codex Computer Use feature.
+It is not a background browser automation or hidden script execution layer.
 
-DesktopVisual is a Windows-only, agent-agnostic, auditable, safety-bounded Computer Use Runtime for visible-first authorized desktop UI. It is not the official built-in Codex Computer Use feature and not a background script executor.
+Current version: `DesktopVisual 1.2.0`.
+Current version line: `local-use stable closure`.
+Current contract: `CURRENT_EXECUTION_CONTRACT.md`.
+Launch contract details: `docs\LAUNCH_CONTRACT.md`.
+Release channel details: `docs\RELEASE_CHANNELS.md`.
+Latency observability, core wait-state, and workflow wait-state details: `docs\LATENCY_OBSERVABILITY.md`.
+VS code-input and evidence hardening details: `docs\VS_CODE_INPUT_AND_EVIDENCE_HARDENING.md`.
+Invalid artifact lifecycle details: `docs\INVALID_ARTIFACT_LIFECYCLE.md`.
+Core wait-state hardening details: `docs\CORE_WAIT_STATE_HARDENING.md`.
+Workflow wait-state hardening details: `docs\WORKFLOW_WAIT_STATE_HARDENING.md`.
+Workspace hygiene details: `docs\WORKSPACE_HYGIENE.md`.
+Field test readiness details: `docs\FIELD_TEST_READINESS.md`.
+VLM lazy loading details: `docs\VLM_LAZY_LOADING.md`.
+Developer tree: `E:\desktopvisualproject\desktopvisual`.
+Local-use/demo release tree: `E:\desktopvisualproject\desktop_release`.
+Current `desktop_release` is not the final restricted public release.
+Current `desktop_release` is for local-use/demo/testing only.
+v1.2.0 is a local-use stable closure of the already validated v1.1.12a state.
+v1.2.0 does not introduce new Runtime behavior, input strategy changes, Launch Contract behavior changes, PermissionManager changes, safety config changes, VLM behavior changes, or VLM timeout changes.
+v1.2.0 is not a public release, does not create public-dist, and does not create a public restricted release.
+The user will use v1.2.0 locally for a period before deciding the next step.
+v1.2.0 protected sync must exclude `.desktopvisual_local`, `developer_versions`, field-test evidence, release-sync evidence, local action evidence, behavior action evidence, public-dist, build output, IDE folders, caches, dependency folders, and temporary patch/tmp/debug files so developer-local and release-local state remain separated.
+Public restricted release creation requires an explicit user request.
 
-v1.1.0 aligns public release permissions with normal visible desktop use while preserving active-protection STOP boundaries. `PUBLIC_DEFAULT` allows ordinary visible desktop action, third-party apps, browser/https pages, localhost pages, Explorer/file manager workflows, local file open, cross-window visible workflows, global desktop visible workflows, and validated absolute screen coordinate actions. It does not stop on broad category words such as test, exam, challenge, submit, or assessment by themselves.
+## Quick Developer Entry
+
+1. Read `CURRENT_EXECUTION_CONTRACT.md`.
+2. Read `docs\LAUNCH_CONTRACT.md` for app/browser/software/desktop-shortcut startup behavior.
+3. Read `docs\RELEASE_CHANNELS.md`.
+4. Read `docs\LATENCY_OBSERVABILITY.md` for latency schema, VLM lazy/cache report fields, and wait-state report fields.
+5. Read `docs\INVALID_ARTIFACT_LIFECYCLE.md` when classifying invalid artifacts or reviewing sync isolation.
+6. Read `docs\VS_CODE_INPUT_AND_EVIDENCE_HARDENING.md` when working on VS code-input/evidence hardening.
+7. Read `docs\CORE_WAIT_STATE_HARDENING.md` when working on core wait-state behavior.
+8. Read `docs\WORKFLOW_WAIT_STATE_HARDENING.md` when working on workflow wait-state behavior.
+9. Read `docs\WORKSPACE_HYGIENE.md` and `docs\FIELD_TEST_READINESS.md` when preparing field tests or cleaning evidence.
+10. Read `docs\VLM_LAZY_LOADING.md` when working on VLM provider probe/cache/degrade behavior.
+11. Read `AGENTS.md` top section.
+12. Read `COMMAND_PROTOCOL.md` top `Current Minimal Agent Contract`.
+13. Use detailed historical sections only when command compatibility or lineage detail is needed.
+
+## Quick Test Entry
+
+```powershell
+E:\desktopvisualproject\desktopvisual\build.ps1
+E:\desktopvisualproject\desktopvisual\current_contract_selftest.ps1
+E:\desktopvisualproject\desktopvisual\documentation_entry_selftest.ps1
+E:\desktopvisualproject\desktopvisual\release_channel_semantics_selftest.ps1
+E:\desktopvisualproject\desktopvisual\latency_observability_selftest.ps1
+E:\desktopvisualproject\desktopvisual\vlm_lazy_cache_selftest.ps1
+E:\desktopvisualproject\desktopvisual\core_wait_state_selftest.ps1
+E:\desktopvisualproject\desktopvisual\workflow_wait_state_selftest.ps1
+E:\desktopvisualproject\desktopvisual\workspace_hygiene_selftest.ps1
+E:\desktopvisualproject\desktopvisual\vs_code_input_hardening_selftest.ps1
+E:\desktopvisualproject\desktopvisual\vs_launch_preflight_selftest.ps1
+E:\desktopvisualproject\desktopvisual\launch_contract_consistency_selftest.ps1
+E:\desktopvisualproject\desktopvisual\latency_baseline_runner.ps1
+```
+
+## Historical Material Notice
+
+Older v3/v4/v5/v6 material in this README, `COMMAND_PROTOCOL.md`, and long status documents is historical / lineage / archived information. It does not override `CURRENT_EXECUTION_CONTRACT.md`.
+
+v1.2.0 records local stable closure. Its main acceptance basis is the v1.1.12a real Visual Studio brace-safe validation: developer real validation PASS, release real validation PASS, brace-safe input default enabled, auto-pair corruption count = 0, clipboard paste = NO, direct source write = NO, developer/user build/run = PASS, release sync completed, and public release not created. No full Visual Studio field task is rerun for v1.2.0.
+
+v1.1.12 added `docs\LAUNCH_CONTRACT.md` as the current startup authority. Desktop icon double-click is Layer 1, keyboard/Start Menu is Layer 2 only with Layer 1 failure evidence, and backend launch is Layer 3 only with Layer 1 and Layer 2 failure evidence. Bare visible/action `--dry-run` is non-executing invalid input, visible/action `--help` is non-executing help, VS Installer is excluded from VS IDE target selection, multiple VS windows block code input, and lifecycle paths use resolver functions. v1.2.0 preserves that behavior without changing Launch Contract behavior beyond version labels.
+
+## Historical Lineage Notes
+
+v1.1.0 aligned public release permissions with normal visible desktop use while preserving active-protection STOP boundaries. `PUBLIC_DEFAULT` allowed ordinary visible desktop action, third-party apps, browser/https pages, localhost pages, Explorer/file manager workflows, local file open, cross-window visible workflows, global desktop visible workflows, and validated absolute screen coordinate actions. It did not stop on broad category words such as test, exam, challenge, submit, or assessment by themselves.
 
 v1.1.0 also makes agent output compact by default without reducing evidence: `report_level=compact`, `evidence_level=full`, `progress_output=compact`, `step_chat_detail=compact`, and `artifact_evidence=full`. Failures still expand with error, evidence, and next repair, and full audit artifacts remain the authority.
 
@@ -18,7 +88,7 @@ Developer permissions remain unchanged: `DEVELOPER_CAPABILITY_DISCOVERY` is stil
 
 **Capability boundary:** visible-first app launch, UIA/OCR/image/template location, provider-gated VLM assist candidates, Runtime candidate validation, focus-verified real keyboard/mouse input primitives, task.json orchestration with bounded recovery, Safety Manifest checks, and Markdown/audit evidence. No active-protection bypass, no protected desktop/UAC control, no VLM direct control, and no autonomous backend fallback decisions.
 
-Current version: `v1.1.0`.
+Historical version note: `v1.1.0`.
 
 v6.1.4 adds dynamic real UI evidence commands:
 
@@ -111,6 +181,7 @@ The current capabilities are: scoped window discovery, screenshots, focus-verifi
 ## Quick Start
 
 ```powershell
+E:\desktopvisualproject\desktopvisual\current_contract_selftest.ps1
 D:\desktopvisual\build.ps1
 D:\desktopvisual\selftest.ps1
 D:\desktopvisual\uia_selftest.ps1

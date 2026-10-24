@@ -1,6 +1,204 @@
 ﻿# Changelog
 
-Current trusted version: `DesktopVisual 1.1.0 Public Release Permission Alignment, Agent Efficiency, and Release Tree Sync`.
+Current trusted version: `DesktopVisual 1.2.0 Local-Use Stable Closure`.
+
+## DesktopVisual 1.2.0 Local-Use Stable Closure
+
+- Promotes the already validated v1.1.12a local-use state to v1.2.0.
+- Updates VERSION and Runtime version labels to 1.2.0.
+- Records developer real validation PASS and release real validation PASS from v1.1.12a.
+- Records brace-safe input default enabled, auto-pair corruption count = 0, clipboard paste = NO, and direct source write = NO.
+- Records developer/user build/run = PASS, release sync completed, and public release not created.
+- Keeps Runtime behavior unchanged beyond version labels.
+- Keeps code input behavior unchanged beyond version labels.
+- Keeps Launch Contract behavior unchanged beyond version labels.
+- No PermissionManager change.
+- No permission reduction.
+- No VLM behavior or timeout change.
+- No `config\safety_manifest.json` or `config\safety.conf` change.
+- No Visual Studio field task rerun.
+- No public restricted release creation.
+- No public-dist tree creation.
+- User will run v1.2.0 locally before deciding any next step.
+
+## DesktopVisual 1.1.12 Launch Contract Unification, Safe CLI Discovery, and VS Startup Convergence
+
+- Added `docs\LAUNCH_CONTRACT.md` as the startup authority.
+- Added v1.1.12 launch contract fields to `visible-app-launch` evidence.
+- Constrained generic `visible-app-launch` to report desktop icon first, fallback evidence, launch contract violations, and priority violations.
+- Added non-executing visible/action command discovery for subcommand `--help`, `-h`, and `/?`.
+- Added non-executing invalid handling for bare visible/action `--dry-run`.
+- Added `vs-launch-preflight` fixture evidence for VS desktop icon first, Installer exclusion, unique IDE target lock, and multi-window ambiguity blocking.
+- Filtered Visual Studio IDE target matching and target lock so Visual Studio Installer is not accepted as the IDE.
+- Added artifact lifecycle path resolver functions and resolver CLI report.
+- Updated lifecycle scripts to resolve release action and developer version paths through resolver functions.
+- Added v1.1.12 launch, CLI, VS preflight, lifecycle resolver, and sync-exclusion selftests/evidence.
+- v1.1.12 protected local-use sync is allowed only after developer validation passes and must preserve `.desktopvisual_local`, field-test evidence, and release-sync evidence.
+- Runtime launch behavior changed.
+- No PermissionManager semantic change.
+- No permission reduction.
+- No VLM behavior or timeout change.
+- No `config\safety_manifest.json` or `config\safety.conf` permission semantic change.
+- No Visual Studio field test.
+- No public restricted release creation.
+- No public-dist tree creation.
+- No v1.2.0 entry.
+
+## DesktopVisual 1.1.11 Separated Invalid Artifact Lifecycle
+
+- Added developer-version invalid artifact lifecycle under `.desktopvisual_local\artifact_lifecycle\developer_versions\<version>`.
+- Added local-use release action invalid artifact lifecycle under `.desktopvisual_local\artifact_lifecycle\release_actions\<action_id>`.
+- Added `scripts\artifact_lifecycle\` with common lifecycle helpers, developer quarantine/cleanup commands, and release action quarantine/cleanup commands.
+- Added `docs\INVALID_ARTIFACT_LIFECYCLE.md` and `config\artifact_lifecycle_policy.json`.
+- Added `artifact_lifecycle_selftest.ps1` covering developer lifecycle, release action lifecycle, sync isolation, protected assets, ambiguous files, and boundary checks.
+- Updated current docs, selftests, and evidence index for v1.1.11.
+- Future sync may copy lifecycle scripts/docs/config policy, but must exclude `.desktopvisual_local`.
+- No Runtime desktop behavior change.
+- No PermissionManager semantic change.
+- No VLM behavior or timeout change.
+- No `config\safety_manifest.json` or `config\safety.conf` permission semantic change.
+- No `desktop_release` sync or cleanup.
+- No Visual Studio field test.
+- No public restricted release creation.
+- No public-dist tree creation.
+- No v1.2.0 entry.
+
+## DesktopVisual 1.1.10 Real VS Code-Input Zero-Corruption and Timeline Closure
+
+- Added real v1.1.9 repeat field-test projectdd payload fixtures under `tests\fixtures\vs_projectdd_v119_repeat_payloads\`.
+- Added `vs_field_test_closure_selftest.ps1`.
+- Added `visible-text-input` reports for keyboard-safe segmentation, target lock preflight, and code-input integrity v2.
+- Added `vs-field-test-closure-fixture` with segmentation, target-lock, integrity, timeline v2.1, command discovery, locator, and first-action proxy reports.
+- Added event timeline v2.1 no-overlap fixture evidence and command discovery `INVALID_ARGUMENT` action-failure isolation evidence.
+- Added locator disambiguation and miss fixture reports with active document, project context, expected file, fallback selector, and recovery/miss reason fields.
+- Added `docs\VS_FIELD_TEST_CLOSURE_CRITERIA.md`.
+- Updated current version/status metadata to v1.1.10 and next planned version to v1.1.11.
+- No PermissionManager semantic change.
+- No VLM behavior or timeout change.
+- No `config\safety_manifest.json` permission semantic change.
+- No `desktop_release` sync.
+- No public restricted release creation.
+- No public-dist tree creation.
+- No v1.2.0 entry.
+
+## DesktopVisual 1.1.8 Workspace Hygiene, Evidence Consolidation, and Field-Test Readiness
+
+- Added `docs\WORKSPACE_HYGIENE.md` to define temporary-file cleanup, evidence retention, ambiguous-file handling, git-status hygiene, and the `desktop_release` no-touch boundary.
+- Added `docs\FIELD_TEST_READINESS.md` to define field-test prerequisites, STOP conditions, evidence requirements, failure recording, and environment-vs-runtime failure attribution.
+- Added `artifacts\EVIDENCE_INDEX.md` to index v1.1.1 through v1.1.8 evidence directories, summaries, logs, baselines, status, and known risks.
+- Added `workspace_hygiene_selftest.ps1`.
+- Added v1.1.8 workspace classification, cleanup ledger, ambiguous-file ledger, unexpected-dirty ledger, and field-test plan evidence.
+- Updated existing v1.1.x selftests to expect VERSION 1.1.8 while preserving their existing semantic checks.
+- No Runtime behavior change.
+- No PermissionManager semantic change.
+- No VLM behavior or timeout change.
+- No CoreWaitState or WorkflowWaitState behavior change.
+- No Explorer, Browser, or Code workflow behavior change.
+- No `desktop_release` sync.
+- No public restricted release creation.
+- No public-dist tree creation.
+
+## DesktopVisual 1.1.7 Workflow Wait-State Hardening
+
+- Extended `src\winagent\CoreWaitState.h` and `src\winagent\CoreWaitState.cpp` with workflow wait-state metadata, `WaitForWorkflowState`, workflow not-replaced recording, and workflow wait summary JSON.
+- Replaced selected Explorer workflow waits with bounded state waits for window readiness, directory/list stability, selection changes, rename/move/delete file state readiness, and scroll list changes.
+- Kept Explorer waits that cannot be observed generically, such as arbitrary target application readiness and inline rename edit readiness, with explicit `not_state_replaced` evidence.
+- Replaced selected Browser workflow waits with bounded state waits for browser foreground/window readiness, page/text readiness, scroll frame stability, field value appearance, and submit result marker readiness.
+- Kept Browser waits that cannot be observed generically, such as Windows Run dialog readiness and address-bar selection/commit micro-waits, with explicit `not_state_replaced` evidence.
+- Added workflow latency/report fields including `workflow_wait_total_ms`, `workflow_wait_saved_ms`, `workflow_wait_timeout_count`, `workflow_wait_not_replaced_count`, `workflow_wait_sites`, `workflow_wait_replaced_from_sleep_ms`, `workflow_wait_exit_reasons`, and Explorer/Browser/Code category totals.
+- Added `docs\WORKFLOW_WAIT_STATE_HARDENING.md`.
+- Added `workflow_wait_state_selftest.ps1`.
+- No PermissionManager semantic change.
+- No VLM behavior or timeout change.
+- No v1.1.6 core wait behavior change beyond helper reuse.
+- No `desktop_release` sync.
+- No public restricted release creation.
+- No public-dist tree creation.
+
+## DesktopVisual 1.1.6 Core Wait-State Hardening
+
+- Added reusable core wait-state helper files `src\winagent\CoreWaitState.h` and `src\winagent\CoreWaitState.cpp`.
+- Replaced bounded core TaskRunner recovery waits, foreground preparation waits, safe context recovery waits, and cursor/buffer stabilization waits with state waits that keep the original maximum wait budget and return early only when state is ready.
+- Marked unsafe-to-stateize editor/dialog waits with explicit `not_state_replaced` evidence instead of silently deleting fixed waits.
+- Added latency/report wait fields including `state_wait_total_ms`, `state_wait_saved_ms`, `wait_exit_reason`, `wait_replaced_from_sleep_ms`, `wait_state_ready`, `wait_timeout_count`, `wait_not_replaced_count`, and `wait_not_replaced_reasons`.
+- Added `docs\CORE_WAIT_STATE_HARDENING.md`.
+- Added `core_wait_state_selftest.ps1`.
+- No PermissionManager semantic change.
+- No VLM behavior or timeout change.
+- No ExplorerWorkflowExecutor or BrowserWorkflowExecutor workflow wait optimization.
+- No `desktop_release` sync.
+- No public restricted release creation.
+- No public-dist tree creation.
+
+## DesktopVisual 1.1.5 VLM Lazy Loading, Cache, and Fast Degradation
+
+- Added VLM lazy loading so Runtime-only latency/report paths do not probe providers.
+- Added VLM capability cache reporting with positive cache and negative cache TTL behavior.
+- Added fast VLM unavailable degradation for missing provider, unsupported image input, wrapper failure, failed probe, and timeout-like failures.
+- Added VLM latency/report fields: `vlm_cache_state`, `vlm_assist_allowed`, `vlm_degraded_to_runtime_only`, `vlm_probe_reason`, and `vlm_skip_reason`.
+- Added `docs\VLM_LAZY_LOADING.md`.
+- Added `vlm_lazy_cache_selftest.ps1`.
+- Capability probe timeout is separate from actual VLM inference timeout.
+- No permission reduction.
+- No PermissionManager semantic change.
+- No Sleep replacement.
+- No `desktop_release` sync.
+- No public restricted release creation.
+- No public-dist tree creation.
+
+## DesktopVisual 1.1.4 Latency Observability and First-Action Baseline
+
+- Added `docs\LATENCY_OBSERVABILITY.md`.
+- Added latency observability schema `latency_observability.v1`.
+- Added `first_action_latency_ms` baseline definition.
+- Added Runtime/report latency summary output through `winagent.exe latency-baseline`.
+- Added `latency_observability_selftest.ps1`.
+- Added `latency_baseline_runner.ps1` and baseline artifacts.
+- No behavior optimization.
+- No VLM lazy loading.
+- No Sleep replacement.
+- No permission reduction.
+- No `desktop_release` sync.
+- No public restricted release creation.
+- No public-dist tree creation.
+
+## DesktopVisual 1.1.3 Release Channel Semantic Cleanup
+
+- Added `docs\RELEASE_CHANNELS.md`.
+- Clarified developer tree, local-use/demo release tree, and future restricted public release semantics.
+- Clarified no `desktop_release` sync during v1.1.1-v1.1.7.
+- Clarified v1.2.0 sync does not create a public restricted release.
+- Preserved the current v1.1.x permission contract.
+- No Runtime behavior changes.
+- No permission reduction.
+- No `desktop_release` sync.
+- No public restricted release creation.
+- No public-dist tree creation.
+
+## DesktopVisual 1.1.2 Documentation Entry Slimming and Historical Isolation
+
+- Slimmed current documentation entry points in README, AGENTS, COMMAND_PROTOCOL, DEVELOPMENT_STATUS, SAFETY_MODEL, AGENT_USAGE_GUIDE, and LOCAL_RELEASE_PERMISSION_POLICY.
+- Isolated historical v3/v4/v5/v6 lineage from the current execution contract by marking old material as historical / lineage / archived where current entry documents are read first.
+- Clarified README, AGENTS, and COMMAND_PROTOCOL top-level current entry paths.
+- Preserved the current v1.1.x permission contract from `CURRENT_EXECUTION_CONTRACT.md`.
+- Added `documentation_entry_selftest.ps1` for current entry and historical-isolation checks.
+- Added `docs\lineage\README.md` as the future home for historical-documentation organization.
+- No Runtime behavior changes.
+- No permission reduction.
+- No `desktop_release` sync.
+- No public restricted release creation.
+
+## DesktopVisual 1.1.1 Current Execution Contract Unification
+
+- Added `CURRENT_EXECUTION_CONTRACT.md` as the highest-priority current execution contract entry for v1.1.x.
+- Unified current developer and local-use release permission semantics: the developer tree and current `desktop_release` keep broad ordinary app/web/IDE/Explorer/local/communication semantics until the v1.2.0 local-use sync.
+- Clarified that current `desktop_release` is a local-use / demo / testing release tree, not the final restricted public release.
+- Marked old version-line documents and v3/v4/v5/v6 material as historical lineage where applicable so they do not override the current v1.1.x contract.
+- Added `current_contract_selftest.ps1` for lightweight current-contract consistency checks.
+- No Runtime behavior changes.
+- No `desktop_release` sync.
+- No permission reduction.
+- No public restricted release creation.
 
 ## DesktopVisual 1.1.0 Public Release Permission Alignment, Agent Efficiency, and Release Tree Sync
 

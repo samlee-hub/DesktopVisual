@@ -1,6 +1,6 @@
 ---
 name: win-desktop-agent
-description: Use when Codex needs to run authorized Windows desktop GUI tasks through DesktopVisual v1.1.0 visible-first runtime. Use visible-app-launch desktop-first for app/URL/shortcut launch and Visual Studio IDE workflows; use observe-locate-act-verify or reviewed run-task; use memory-frame-first OCR from full-screen frame evidence; use provider-gated VLM assist on the real provider path only for frontend perception/locate failures; use compact progress with full evidence; preserve bounded fallback discipline; report errors and policy violations as failure/BLOCKED, not PASS.
+description: Use when Codex needs to run authorized Windows desktop GUI tasks through DesktopVisual v1.1.12 visible-first runtime. Use the v1.1.12 Launch Contract for app/URL/shortcut launch and Visual Studio IDE workflows; use observe-locate-act-verify or reviewed run-task; use memory-frame-first OCR from full-screen frame evidence; use provider-gated VLM assist on the real provider path only for frontend perception/locate failures; use compact progress with full evidence; preserve bounded fallback discipline; report errors and policy violations as failure/BLOCKED, not PASS.
 ---
 
 # Win Desktop Agent Adapter
@@ -10,6 +10,8 @@ DesktopVisual is a Windows visible-first desktop runtime, not a background scrip
 Project root resolution: pass `-Root`, set `DESKTOPVISUAL_ROOT`, or keep DesktopVisual at the legacy `D:\desktopvisual` fallback.
 
 Shared adapter rules: `..\..\shared\TASK_FLOW.md`, `SAFETY_RULES.md`, `ERROR_HANDLING.md`, and `REPORT_READING.md`.
+
+Current launch authority: `docs\LAUNCH_CONTRACT.md` in the DesktopVisual project root.
 
 safety stop rules: stop on command errors, failed report steps, safety denial, ambiguous windows, active protection/security interception, fallback discipline violation, emergency stop, and invalid motion profiles.
 
@@ -32,12 +34,12 @@ Before any GUI action:
 1. Run `<project_root>\bin\winagent.exe version` and confirm `data.project_root`.
 2. Confirm `data.manifest_loaded` from version output.
 3. Run `safety-report` for policy visibility when the task involves input.
-4. For opening an app, URL, local shortcut, `.lnk`, `.url`, or webpage shortcut, use `visible-app-launch` first.
+4. For opening an app, URL, local shortcut, `.lnk`, `.url`, or webpage shortcut, follow `docs\LAUNCH_CONTRACT.md`; `visible-app-launch` is allowed only when it follows desktop icon double-click first and records the v1.1.12 launch contract fields.
 5. For already-open targets, run `observe --title "<target>"`, confirm one visible target, read `data.safety`, and then locate/act/verify.
 
 ## Visible-App-Launch Contract
 
-Use visible-app-launch for app, URL, local shortcut, .lnk, .url, and webpage shortcut launches.
+Use the v1.1.12 Launch Contract for app, URL, local shortcut, .lnk, .url, and webpage shortcut launches.
 
 App launch is desktop-first. visible-app-launch is desktop-first. Reveal desktop, observe desktop, locate the visible desktop icon/shortcut through UIA/OCR/visible evidence, double-click with real mouse input, and verify the target window when `target-title` or `process` is supplied.
 
@@ -45,13 +47,15 @@ Start Menu visible search is a fallback, not the first choice. backend launch, S
 
 One failure cannot directly move to fallback. If the first desktop locate or double-click fails, perform bounded recovery and a second desktop visible attempt, or provide strict surface-impossible evidence.
 
-Required launch evidence includes `runtime_visible_first_launch`, `launch_strategy`, `desktop_surface_attempted`, `desktop_icon_path_used`, `start_menu_fallback_attempted`, `backend_launch_used`, `bounded_recovery_attempted`, and `target_window_verified`.
+Required launch evidence includes `launch_contract_version`, `launch_target`, `desktop_icon_visible`, `desktop_icon_locate_attempts`, `desktop_icon_double_click_attempted`, `desktop_icon_double_click_result`, `keyboard_or_start_menu_fallback_attempted`, `keyboard_or_start_menu_fallback_reason`, `backend_fallback_attempted`, `backend_fallback_reason`, `final_launch_layer`, `fallback_evidence`, `allowed_by_contract`, `launch_contract_violation`, `priority_violation`, `runtime_visible_first_launch`, `launch_strategy`, `desktop_surface_attempted`, `desktop_icon_path_used`, `start_menu_fallback_attempted`, `backend_launch_used`, `bounded_recovery_attempted`, and `target_window_verified`.
+
+Visible/action command discovery is non-executing. Do not probe visible subcommands with `--help`; use `winagent.exe help`, `COMMAND_PROTOCOL.md`, reviewed scripts, or fixed command templates. Bare visible/action `--dry-run` is invalid and must return `INVALID_ARGUMENT_NON_EXECUTING`.
 
 ## Fallback Discipline
 
-Layer 1: visible UI path.
-Layer 2: visible keyboard fallback.
-Layer 3: backend fallback.
+Layer 1: desktop icon visible mouse double-click for launch tasks, otherwise visible UI path.
+Layer 2: keyboard or Start Menu fallback only with Layer 1 failure evidence.
+Layer 3: backend fallback only with Layer 1 and Layer 2 failure evidence.
 
 Entering fallback requires two bounded visible attempts or strict surface-impossible evidence. Entering shortcut fallback requires at least two bounded visible attempts or strict surface-impossible evidence. Entering backend fallback requires visible path failure plus keyboard fallback failure.
 
@@ -118,7 +122,7 @@ v1.0.4 complex IDE workflows must use `RealVlmRuntimeBridge` / the real VLM brid
 
 ## Visual Studio C++ Complex IDE Workflow
 
-Visual Studio C++ workflows must launch VS by visible desktop icon double-click only: show desktop, locate the VS desktop icon by UIA/OCR/visible evidence, move to it, double-click, and verify the VS window. Start Menu search, direct `devenv.exe`, PowerShell launch, ShellExecute, and backend `.sln` open are invalid normal paths.
+Visual Studio C++ workflows must launch VS by visible desktop icon double-click only: show desktop, locate the VS desktop icon by UIA/OCR/visible evidence, move to it, double-click, and verify exactly one `devenv.exe` VS IDE main window. Visual Studio Installer is not Visual Studio IDE and must not be target-locked. Multiple VS windows return `WINDOW_NOT_UNIQUE` or equivalent and block project creation/code input. Start Menu search, direct `devenv.exe`, PowerShell launch, ShellExecute, and backend `.sln` open are invalid normal paths unless explicitly recorded as later fallback after required evidence.
 
 Use `SingleTestProject` and the Empty Project template for the fixture, keep the VS default location/settings, and reuse the same project after creation. Open the project through visible VS UI, preferably the Start Window Recent Project path.
 

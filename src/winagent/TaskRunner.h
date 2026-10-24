@@ -105,6 +105,7 @@ struct TaskDefinition {
     std::wstring name;
     std::wstring permissionMode;
     std::wstring fullAccessSessionId;
+    std::wstring verifyMode;
     TaskTarget target;
     TaskBudget budget;
     TaskCheckpointConfig checkpoint;
@@ -201,6 +202,7 @@ struct TaskStepResult {
     FailureClassification failure;
     std::vector<RecoveryAttemptRecord> recoveryAttempts;
     bool recovered = false;
+    bool expectDeferred = false;
 };
 
 struct TaskResult {
@@ -220,6 +222,8 @@ struct TaskResult {
     std::vector<TaskTemplateUsage> templateUsages;
     std::vector<std::wstring> screenshots;
     std::vector<std::wstring> reportPaths;
+    std::wstring reportJsonPath;
+    std::wstring verifyMode;
     std::vector<SessionCheckpoint> checkpoints;
     std::wstring lastCheckpointId;
     bool temporaryCheckpointsCleaned = false;

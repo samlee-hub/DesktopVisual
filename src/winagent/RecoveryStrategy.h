@@ -1,5 +1,7 @@
 #pragma once
 
+#include "CoreWaitState.h"
+
 #include <string>
 #include <vector>
 
@@ -20,6 +22,8 @@ struct RecoveryAttemptRecord {
     std::wstring result;
     std::wstring details;
     std::vector<std::wstring> strategySteps;
+    bool hasCoreWait = false;
+    CoreWaitStateResult coreWait;
 };
 
 RecoveryStrategy StrategyForError(const std::wstring& errorCode);

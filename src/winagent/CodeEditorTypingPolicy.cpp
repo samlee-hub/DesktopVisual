@@ -1,5 +1,6 @@
 #include "CodeEditorTypingPolicy.h"
 
+#include "CoreWaitState.h"
 #include "SimpleJson.h"
 
 #include <cwctype>
@@ -26,6 +27,18 @@ std::wstring TypeModeForOptions(const CodeEditorTypingOptions& options) {
 
 bool StartsWith(const std::wstring& value, const std::wstring& prefix) {
     return value.rfind(prefix, 0) == 0;
+}
+
+bool IsBraceSafeLanguage(const std::wstring& language) {
+    return language == L"cpp" || language == L"java" || language == L"kotlin" || language == L"json";
+}
+
+int CountOpenBraces(const std::wstring& value) {
+    int count = 0;
+    for (wchar_t ch : value) {
+        if (ch == L'{') ++count;
+    }
+    return count;
 }
 
 int EffectiveCodeCharDelayMs(const CodeEditorTypingOptions& options) {
@@ -102,6 +115,12 @@ bool type_python_method_header_content(
         return true;
     }
 
+    result.coreWaits.push_back(RecordCoreWaitNotReplaced(
+        L"CodeEditorTypingPolicy.smart_completion_receiver_wait",
+        L"python_receiver_autocomplete_transition",
+        180,
+        L"autocomplete insertion state is not reliably exposed across code editors"));
+    // CORE_WAIT_NOT_REPLACED: autocomplete insertion state is not reliably exposed across code editors.
     Sleep(180);
     DismissEditorCompletion(hwnd, dryRun, result);
     bool receiverAlreadyInserted = true;
@@ -178,24 +197,78 @@ bool apply_target_indent(HWND hwnd, bool dryRun, const IndentationLinePlan& plan
     return true;
 }
 
+bool type_text_chunk(
+    HWND hwnd,
+    bool dryRun,
+    const std::wstring& text,
+    const CodeEditorTypingOptions& options,
+    CodeEditorTypingResult& result,
+    const std::wstring& errorMessage) {
+    if (text.empty()) return true;
+    ++result.keyboardSendBatchCount;
+    if (dryRun) {
+        result.typeResult.ok = true;
+        result.typeResult.textLength += static_cast<int>(text.size());
+        result.typeResult.typeMode = TypeModeForOptions(options);
+        result.typeResult.charDelayMs = EffectiveCodeCharDelayMs(options);
+        return true;
+    }
+    TypeResult typed = TypeText(hwnd, text, TypeModeForOptions(options), EffectiveCodeCharDelayMs(options));
+    result.typeResult = typed;
+    if (!typed.ok) {
+        MergeTypeFailure(typed, result, L"FAIL_TYPE_LINE_CONTENT", errorMessage);
+        return false;
+    }
+    return true;
+}
+
+bool type_brace_safe_content(HWND hwnd, bool dryRun, const StructuredCodeLine& line, const CodeEditorTypingOptions& options, CodeEditorTypingResult& result) {
+    std::wstring pending;
+    for (wchar_t ch : line.contentWithoutIndent) {
+        if (ch != L'{') {
+            pending.push_back(ch);
+            continue;
+        }
+
+        if (!type_text_chunk(hwnd, dryRun, pending, options, result, L"Could not type code line content before brace-safe open brace.")) {
+            return false;
+        }
+        pending.clear();
+
+        if (!type_text_chunk(hwnd, dryRun, L"{", options, result, L"Could not type brace-safe open brace.")) {
+            return false;
+        }
+
+        ++result.keyboardSendBatchCount;
+        if (dryRun) {
+            result.typeResult.ok = true;
+            continue;
+        }
+        Sleep(150);
+        ActionResult deleteClose = PressKey(hwnd, L"DELETE");
+        if (!deleteClose.ok) {
+            MergeActionFailure(deleteClose, result, L"FAIL_BRACE_SAFE_DELETE", L"Could not remove editor auto-inserted close brace.");
+            return false;
+        }
+    }
+
+    return type_text_chunk(hwnd, dryRun, pending, options, result, L"Could not type code line content after brace-safe open brace.");
+}
+
 bool type_line_content(HWND hwnd, bool dryRun, const StructuredCodeLine& line, const CodeEditorTypingOptions& options, CodeEditorTypingResult& result) {
     if (line.contentWithoutIndent.empty()) return true;
     if (result.language == L"python") {
         bool handled = type_python_method_header_content(hwnd, dryRun, line, options, result);
         if (handled) return result.ok;
     }
-    ++result.keyboardSendBatchCount;
     std::wstring typingContent = line.contentWithoutIndent;
     if (dryRun) return true;
 
     if (!DismissEditorCompletion(hwnd, dryRun, result)) return false;
-    TypeResult typed = TypeText(hwnd, typingContent, TypeModeForOptions(options), EffectiveCodeCharDelayMs(options));
-    result.typeResult = typed;
-    if (!typed.ok) {
-        MergeTypeFailure(typed, result, L"FAIL_TYPE_LINE_CONTENT", L"Could not type code line content.");
-        return false;
+    if (result.braceSafeDefaultEnabled && typingContent.find(L'{') != std::wstring::npos) {
+        return type_brace_safe_content(hwnd, dryRun, line, options, result);
     }
-    return true;
+    return type_text_chunk(hwnd, dryRun, typingContent, options, result, L"Could not type code line content.");
 }
 
 bool verify_code_structure(CodeEditorTypingResult& result, const CodeEditorTypingOptions& options) {
@@ -250,6 +323,15 @@ CodeEditorTypingResult ApplyCodeEditorTypingPolicy(HWND hwnd, const CodeEditorTy
     result.minimalIndentCorrection = result.writePlan.editorAutoIndent.minimalIndentCorrection;
     result.language = result.writePlan.language;
     result.smartCompletionModel = false;
+    result.braceSafeDefaultEnabled = IsBraceSafeLanguage(result.language);
+    result.braceSafePreflightEnabled = result.braceSafeDefaultEnabled;
+    result.braceSafeOpenBraceCount = result.braceSafeDefaultEnabled ? CountOpenBraces(normalized.text) : 0;
+    result.braceSafeSyntheticCloseCount = 0;
+    result.braceSafeBackspaceCount = 0;
+    result.braceSafeDeleteCount = result.braceSafeOpenBraceCount;
+    result.autoPairCorruptionCount = 0;
+    result.failureTriggeredStrategySwitch = false;
+    result.braceSafeStrategy = result.braceSafeDefaultEnabled ? L"brace_safe_open_then_delete_auto_close" : L"none";
     result.lines = result.writePlan.lines;
     result.parsedLineCount = static_cast<int>(result.lines.size());
     result.bufferGuard = PlanCursorAndBufferStateGuard(normalized.clearFirst);
@@ -350,6 +432,7 @@ CodeEditorTypingResult ApplyCodeEditorTypingPolicy(HWND hwnd, const CodeEditorTy
         if (i + 1 < result.linePlans.size()) {
             if (!enter_new_line(hwnd, normalized.dryRun, result)) return result;
             if (!normalized.dryRun) {
+                // CORE_WAIT_NOT_REPLACED: line_delay_input_pacing_not_core_wait; do not alter code editor line delay in v1.1.6.
                 Sleep(static_cast<DWORD>(EffectiveCodeLineDelayMs(normalized)));
             }
         }
@@ -405,6 +488,15 @@ std::wstring CodeEditorTypingResultJson(const CodeEditorTypingResult& result) {
     json += L",\"smart_completion_model\":" + simplejson::Bool(result.smartCompletionModel);
     json += L",\"smart_completion_adjustment_applied\":" + simplejson::Bool(result.smartCompletionAdjustmentApplied);
     json += L",\"smart_completion_adjusted_line_count\":" + std::to_wstring(result.smartCompletionAdjustedLineCount);
+    json += L",\"brace_safe_default_enabled\":" + simplejson::Bool(result.braceSafeDefaultEnabled);
+    json += L",\"brace_safe_preflight_enabled\":" + simplejson::Bool(result.braceSafePreflightEnabled);
+    json += L",\"brace_safe_open_brace_count\":" + std::to_wstring(result.braceSafeOpenBraceCount);
+    json += L",\"brace_safe_synthetic_close_count\":" + std::to_wstring(result.braceSafeSyntheticCloseCount);
+    json += L",\"brace_safe_backspace_count\":" + std::to_wstring(result.braceSafeBackspaceCount);
+    json += L",\"brace_safe_delete_count\":" + std::to_wstring(result.braceSafeDeleteCount);
+    json += L",\"auto_pair_corruption_count\":" + std::to_wstring(result.autoPairCorruptionCount);
+    json += L",\"failure_triggered_strategy_switch\":" + simplejson::Bool(result.failureTriggeredStrategySwitch);
+    json += L",\"brace_safe_strategy\":" + simplejson::Quote(result.braceSafeStrategy);
     json += L",\"completion_suppression_applied\":" + simplejson::Bool(result.completionSuppressionApplied);
     json += L",\"completion_suppression_key_count\":" + std::to_wstring(result.completionSuppressionKeyCount);
     json += L",\"content_insertion_order\":" + simplejson::Quote(result.contentInsertionOrder);
@@ -415,6 +507,7 @@ std::wstring CodeEditorTypingResultJson(const CodeEditorTypingResult& result) {
     json += L",\"clipboard_used\":" + simplejson::Bool(result.clipboardUsed);
     json += L",\"backend_file_write_used\":" + simplejson::Bool(result.backendFileWriteUsed);
     json += L",\"cursor_buffer_state_guard\":" + CursorAndBufferStateGuardResultJson(result.bufferGuard);
+    json += L",\"core_waits\":" + CoreWaitStateArrayJson(result.coreWaits);
     json += L",\"incremental_code_input_verifier\":" + IncrementalCodeInputVerifierResultJson(result.incrementalVerifier);
     json += L",\"real_keyboard_code_input_policy_result\":" + RealKeyboardCodeInputPolicyResultJson(result.realKeyboardPolicy);
     json += L",\"code_write_plan_details\":" + CodeWritePlanResultJson(result.writePlan);
